@@ -38,6 +38,32 @@ impl CombineIter {
     }
 }
 
+pub struct CombineIterStd {
+    comb_iter: CombineIter,
+    first: bool,
+}
+
+impl CombineIterStd {
+    pub fn new(len: usize, values: usize) -> CombineIterStd {
+        CombineIterStd {
+            comb_iter: CombineIter::new(len, values),
+            first: true,
+        }
+    }
+}
+
+impl Iterator for CombineIterStd {
+    type Item = Vec<usize>;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.first {
+            self.first = false;
+        } else if !self.comb_iter.next() {
+            return None;
+        }
+        Some(Vec::<_>::from(self.comb_iter.get()))
+    }
+}
+
 pub struct CombineWithRepIter {
     values: usize,
     item: Vec<usize>,
