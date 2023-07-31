@@ -9,18 +9,26 @@ fn calc_min_sumn_to_fill(n: usize, ks: usize) -> Option<Vec<usize>> {
             if comb[0] != 0 || comb.get(1).copied().unwrap_or(1) != 1 {
                 break;
             }
-            let mut filled = vec![0usize; n];
+            let mut filled = vec![false; n];
             let mut numr_iter = CombineWithRepIter::new(k, k);
             loop {
                 let numc = numr_iter.get();
-                let sum = numc.iter().map(|x| comb[*x]).sum::<usize>() % n;
-                filled[sum] += 1;
+                //let sum = numc.iter().map(|x| comb[*x]).sum::<usize>() % n;
+                let sum = numc.iter().map(|x| comb[*x]).fold(0, |a, x| {
+                    let a = a + x;
+                    if a >= n {
+                        a - n
+                    } else {
+                        a
+                    }
+                });
+                filled[sum] = true;
                 if !numr_iter.next() {
                     break;
                 }
             }
             
-            if filled.into_iter().all(|x| x!=0) {
+            if filled.into_iter().all(|x| x) {
                 return Some(Vec::from(comb));
             }
             
