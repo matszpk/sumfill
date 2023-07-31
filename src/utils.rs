@@ -103,3 +103,30 @@ impl CombineWithRepIter {
         self.values
     }
 }
+
+pub fn combinations(len: u64, values: u64) -> u64 {
+    if len > values {
+        return 0;
+    }
+    let diff = values - len;
+    let (diff, len) = if diff < len {
+        (diff, len)
+    } else {
+        (len, diff)
+    };
+    let mut product: u64 = 1;
+    let mut divider = 2;
+    for f in len + 1..=values {
+        //product = product.checked_mul(f).unwrap();
+        if let Some(p) = product.checked_mul(f) {
+            product = p;
+            while divider <= diff && (product % divider) == 0 {
+                product /= divider;
+                divider += 1;
+            }
+        } else {
+            panic!("comberr: {} {}", len, values);
+        }
+    }
+    product
+}

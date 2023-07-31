@@ -535,8 +535,16 @@ fn main() {
     //     }
     // }
     
-    (1..300).into_par_iter().for_each(|i| {
-        if let Some(comb) = calc_min_sumn_to_fill(i, 1) {
+    (300..=600).into_par_iter().for_each(|i| {
+        // find k_start
+        let ks = (1..64).find(|&x| {
+            let max_n = usize::try_from(combinations(x as u64, x+x-1 as u64)).unwrap();
+            //writeln!(io::stdout().lock(), "KSmax {}: {}", i, max_n);
+            max_n >= i
+        }).unwrap().try_into().unwrap();
+        //writeln!(io::stdout().lock(), "KS {}: {}", i, ks);
+        
+        if let Some(comb) = calc_min_sumn_to_fill(i, ks) {
             writeln!(io::stdout().lock(), "Result {}: {} {:?}", i, comb.len(), comb);
             //k = std::cmp::max(1, comb.len()-1);
         }
