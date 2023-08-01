@@ -387,6 +387,54 @@ fn calc_min_sumn_to_fill(n: usize, ks: usize) -> Option<Vec<usize>> {
     None
 }
 
+// fn calc_min_sumn_to_fill_all(n: usize, ks: usize) -> Option<Vec<usize>> {
+//     for k in ks..64 {
+//         let mut comb_iter = CombineIter::new(k, n);
+//         let mut count = 0;
+//         loop {
+//             let comb = comb_iter.get();
+//             if (count & ((1 << 20) - 1)) == 0 {
+//                 writeln!(io::stdout().lock(), "Progress: {} {} {:?}", n, k, comb);
+//             }
+//             if comb[0] != 0 {
+//                 break;
+//             }
+//             // let mut filled = vec![false; n];
+//             // let mut numr_iter = CombineWithRepIter::new(k, k);
+//             // loop {
+//             //     let numc = numr_iter.get();
+//             //     //let sum = numc.iter().map(|x| comb[*x]).sum::<usize>() % n;
+//             //     let sum = numc.iter().map(|x| comb[*x]).fold(0, |a, x| {
+//             //         let a = a + x;
+//             //         if a >= n {
+//             //             a - n
+//             //         } else {
+//             //             a
+//             //         }
+//             //     });
+//             //     filled[sum] = true;
+//             //     if !numr_iter.next() {
+//             //         break;
+//             //     }
+//             // }
+//             
+//             let mut filled = vec![false; n];
+//             fill_sums(n, comb, &mut filled);
+//             //assert_eq!(filled, filled2);
+//             
+//             if filled.into_iter().all(|x| x) {
+//                 return Some(Vec::from(comb));
+//             }
+//             
+//             if !comb_iter.next() {
+//                 break;
+//             }
+//             count += 1;
+//         }
+//     }
+//     None
+// }
+
 // fn calc_min_sumn_to_fill_par(n: usize, ks: usize) -> Option<Vec<usize>> {
 //     for k in ks..64 {
 //         if k < 5 {
@@ -535,7 +583,7 @@ fn main() {
     //     }
     // }
     
-    (300..=600).into_par_iter().for_each(|i| {
+    (601..=1000).into_par_iter().for_each(|i| {
         // find k_start
         let ks = (1..64).find(|&x| {
             let max_n = usize::try_from(combinations(x as u64, x+x-1 as u64)).unwrap();
@@ -549,4 +597,19 @@ fn main() {
             //k = std::cmp::max(1, comb.len()-1);
         }
     });
+    
+//     (251..=462).into_par_iter().for_each(|i| {
+//         // find k_start
+//         let ks = (1..64).find(|&x| {
+//             let max_n = usize::try_from(combinations(x as u64, x+x-1 as u64)).unwrap();
+//             //writeln!(io::stdout().lock(), "KSmax {}: {}", i, max_n);
+//             max_n >= i
+//         }).unwrap().try_into().unwrap();
+//         //writeln!(io::stdout().lock(), "KS {}: {}", i, ks);
+//         
+//         if let Some(comb) = calc_min_sumn_to_fill_all(i, ks) {
+//             writeln!(io::stdout().lock(), "Result {}: {} {:?}", i, comb.len(), comb);
+//             //k = std::cmp::max(1, comb.len()-1);
+//         }
+//     });
 }
