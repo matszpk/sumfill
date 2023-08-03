@@ -10,7 +10,7 @@ use utils::*;
 // filled_l1 - filled for sums with k-2 elements
 // filled_l2 - filled for sums with k-1 elements
 fn init_sum_fill_diff_change(n: usize, comb: &[usize], comb_filled: &mut [u64],
-            filled_l1: &mut [u64], filled_l2: &mut [u64]) {
+            filled_l1: &mut [u64], filled_l1l2: &mut [u64], filled_l2: &mut [u64]) {
     let k = comb.len();
     comb_filled.fill(0);
     filled_l1.fill(0);
@@ -47,8 +47,13 @@ fn init_sum_fill_diff_change(n: usize, comb: &[usize], comb_filled: &mut [u64],
         if l1count == 0 && l2count == 0 {
             comb_filled[fixsum >> 6] |= 1u64 << (fixsum & 63);
         } else {
-            if l1count != 0 && l2count == 0 {
-                filled_l1[filled_clen*(l1count-1) + (fixsum >> 6)] |= 1u64 << (fixsum & 63);
+            if l1count != 0 {
+                if l2count == 0 {
+                    filled_l1[filled_clen*(l1count-1) + (fixsum >> 6)] |= 1u64 << (fixsum & 63);
+                } else {
+                    filled_l1l2[filled_clen*(k*(l1count-1) + (l2count-1)) + (fixsum >> 6)] |=
+                        1u64 << (fixsum & 63);
+                }
             } else if l2count != 0 {
                 filled_l2[filled_clen*(l2count-1) + (fixsum >> 6)] |= 1u64 << (fixsum & 63);
             }
@@ -59,9 +64,9 @@ fn init_sum_fill_diff_change(n: usize, comb: &[usize], comb_filled: &mut [u64],
     }
 }
 
-fn shift_filled_lx(len: usize, k: usize, filled_l1: &mut [u64], fix_sh: usize) {
+fn shift_filled_lx(len: usize, k: usize, filled_l1: &mut [u64], fix_sh: usize, stride: usize) {
     for i in 0..k {
-        let filled = &mut filled_l1[len*i..len*(i+1)];
+        let filled = &mut filled_l1[len*stride*i..len*(stride*i+1)];
         let shift = k+1;
         let mut vprev = filled[len-1];
         for j in 0..len-1 {
@@ -78,10 +83,10 @@ fn shift_filled_lx(len: usize, k: usize, filled_l1: &mut [u64], fix_sh: usize) {
 }
 
 fn apply_filled_lx(len: usize, k: usize, filled_l1: &[u64], comb_filled: &[u64],
-                    out_filled: &mut [u64]) {
+                    out_filled: &mut [u64], stride: usize) {
     out_filled.copy_from_slice(comb_filled);
     for i in 0..k {
-        let filled = &filled_l1[len*i..len*(i+1)];
+        let filled = &filled_l1[len*i*stride..len*(i*stride+1)];
         for j in 0..len {
             out_filled[j] |= filled[j];
         }
@@ -99,7 +104,7 @@ fn check_all_filled(filled: &[u64], fix_sh: usize) -> bool {
 }
 
 fn process_comb_l1l2(n: usize, k: usize, start: usize, comb_filled: &[u64],
-        filled_l1: &[u64], filled_l2: &[u64],
+        filled_l1: &[u64], filled_l1l2: &[u64], filled_l2: &[u64],
         mut found_call: impl FnMut(usize, usize)) {
     let filled_clen = comb_filled.len();
     let fix_sh =  if (n & 63) != 0 {
@@ -110,20 +115,40 @@ fn process_comb_l1l2(n: usize, k: usize, start: usize, comb_filled: &[u64],
     let mut l1_filled = vec![0; comb_filled.len()];
     let mut l2_filled = vec![0; comb_filled.len()];
     let mut l1_filled_l1 = Vec::from(filled_l1);
-    let mut l1_filled_l2 = Vec::from(filled_l2);
-    let mut l2_filled_l2 = l1_filled_l2.clone();
+    let mut l1_filled_l1l2 = Vec::from(filled_l1l2);
+    let mut l1_filled_l2_templ = Vec::from(filled_l2);
+    let mut l2_filled_l2 = l1_filled_l2_templ.clone();
     for i in start..n-1 {
-        l2_filled_l2.copy_from_slice(&l1_filled_l2);
-        apply_filled_lx(filled_clen, k, &l1_filled_l1, &comb_filled, &mut l1_filled);
+        apply_filled_lx(filled_clen, k, &l1_filled_l1, &comb_filled, &mut l1_filled, 1);
+        // apply l1l2 to l1_filled_l2_templ -> l2_filled_l2
+        for j in 0..k {
+            apply_filled_lx(filled_clen, k,
+                            &l1_filled_l1l2[filled_clen*j..filled_clen*(k*(k-1)+j+1)],
+                            &l1_filled_l2_templ[filled_clen*j..filled_clen*(j+1)],
+                            &mut l2_filled_l2[filled_clen*j..filled_clen*(j+1)], k);
+        }
+        // apply to comb_filled
         for j in i+1..n {
-            apply_filled_lx(filled_clen, k, &l2_filled_l2, &l1_filled, &mut l2_filled);
+            apply_filled_lx(filled_clen, k, &l2_filled_l2, &l1_filled, &mut l2_filled, 1);
             if check_all_filled(&l2_filled, fix_sh) {
                 found_call(i, j);
             }
-            shift_filled_lx(filled_clen, k, &mut l2_filled_l2, fix_sh);
+            shift_filled_lx(filled_clen, k, &mut l2_filled_l2, fix_sh, 1);
         }
-        shift_filled_lx(filled_clen, k, &mut l1_filled_l1, fix_sh);
-        shift_filled_lx(filled_clen, k, &mut l1_filled_l2, fix_sh);
+        // shift l1
+        shift_filled_lx(filled_clen, k, &mut l1_filled_l1, fix_sh, 1);
+        // shift l1l2: for l1 elems and l1l2 for elements l1 and l2
+        for j in 0..k {
+            // l1 elements
+            shift_filled_lx(filled_clen, k,
+                            &mut l1_filled_l1l2[filled_clen*j..filled_clen*(k*(k-1)+j+1)],
+                            fix_sh, k);
+            // l2 elements
+            shift_filled_lx(filled_clen, k,
+                            &mut l1_filled_l1l2[filled_clen*k*j..filled_clen*k*(j+1)],
+                            fix_sh, 1);
+        }
+        shift_filled_lx(filled_clen, k, &mut l1_filled_l2_templ, fix_sh, 1);
     }
 }
 
@@ -478,6 +503,7 @@ fn calc_min_sumn_to_fill_par_all(n: usize) {
         let filled_clen = (n + 63) >> 6;
         let mut comb_filled = vec![0u64; filled_clen];
         let mut filled_l1 = vec![0u64; filled_clen*k];
+        let mut filled_l1l2 = vec![0u64; filled_clen*k*k];
         let mut filled_l2 = vec![0u64; filled_clen*k];
         let mut expected_found = vec![];
         let mut comb_start_pos = 0;
@@ -512,14 +538,14 @@ fn calc_min_sumn_to_fill_par_all(n: usize) {
                 if k >= 3 {
                     if comb[k-3]+1==comb[k-2] && comb[k-2]+2==comb[k-1] {
                         init_sum_fill_diff_change(n, comb, &mut comb_filled,
-                                &mut filled_l1, &mut filled_l2);
+                                &mut filled_l1, &mut filled_l1l2, &mut filled_l2);
                         expected_found.clear();
                         comb_start_pos = comb[k-2];
                     }
                     if n-2==comb[k-2] && n-1==comb[k-1] {
                         let mut result_found = vec![];
                         process_comb_l1l2(n, k, comb_start_pos, &comb_filled,
-                            &filled_l1, &filled_l2,
+                            &filled_l1, &filled_l1l2, &filled_l2,
                             |i,j| {
                                 result_found.push((i, j));
                             });
