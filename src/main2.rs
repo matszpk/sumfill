@@ -35,7 +35,6 @@ fn init_sum_fill_diff_change(n: usize, comb: &[usize], comb_filled: &mut [u64],
         });
         
         let fixsum = fix_sh + sum;
-        let last = *numc.last().unwrap();
         let mut l1count = 0;
         let mut l2count = 0;
         for c in numc {
@@ -49,6 +48,7 @@ fn init_sum_fill_diff_change(n: usize, comb: &[usize], comb_filled: &mut [u64],
             comb_filled[fixsum >> 6] |= 1u64 << (fixsum & 63);
         } else {
             if l1count != 0 && l2count == 0 {
+                println!("XCC: {} {} {}", fixsum, l1count, filled_clen);
                 filled_l1[filled_clen*(l1count-1) + (fixsum >> 6)] |= 1u64 << (fixsum & 63);
             } else if l2count != 0 {
                 filled_l2[filled_clen*(l2count-1) + (fixsum >> 6)] |= 1u64 << (fixsum & 63);
@@ -84,7 +84,7 @@ fn apply_filled_lx(len: usize, k: usize, filled_l1: &[u64], comb_filled: &[u64],
     for i in 0..k {
         let filled = &filled_l1[len*i..len*(i+1)];
         for j in 0..len {
-            out_filled[i] |= filled[i];
+            out_filled[j] |= filled[j];
         }
     }
 }
@@ -101,7 +101,7 @@ fn check_all_filled(filled: &[u64], fix_sh: usize) -> bool {
 
 fn process_comb_l1l2(n: usize, k: usize, start: usize, comb_filled: &[u64],
         filled_l1: &[u64], filled_l2: &[u64],
-        found_call: impl Fn(usize, usize)) {
+        mut found_call: impl FnMut(usize, usize)) {
     let filled_clen = comb_filled.len();
     let fix_sh =  if (n & 63) != 0 {
         (u64::BITS - ((n as u32) & 63)) as usize
@@ -115,7 +115,7 @@ fn process_comb_l1l2(n: usize, k: usize, start: usize, comb_filled: &[u64],
     let mut l2_filled_l2 = l1_filled_l2.clone();
     for i in start..n-1 {
         l2_filled_l2.copy_from_slice(&l1_filled_l2);
-        apply_filled_lx(n, k-1, &l1_filled_l1, &comb_filled, &mut l1_filled);
+        apply_filled_lx(n, k, &l1_filled_l1, &comb_filled, &mut l1_filled);
         for j in i+1..n {
             apply_filled_lx(n, k, &l2_filled_l2, &l1_filled, &mut l2_filled);
             if check_all_filled(&l2_filled, fix_sh) {
@@ -123,7 +123,7 @@ fn process_comb_l1l2(n: usize, k: usize, start: usize, comb_filled: &[u64],
             }
             shift_filled_lx(filled_clen, k, &mut l2_filled_l2, fix_sh);
         }
-        shift_filled_lx(filled_clen, k-1, &mut l1_filled_l1, fix_sh);
+        shift_filled_lx(filled_clen, k, &mut l1_filled_l1, fix_sh);
         shift_filled_lx(filled_clen, k, &mut l1_filled_l2, fix_sh);
     }
 }
@@ -475,6 +475,14 @@ fn calc_min_sumn_to_fill_par_all(n: usize) {
     
     for k in ks..64 {
         let found_count = Arc::new(AtomicU64::new(0));
+        // TESTING!!!
+        let filled_clen = (n + 63) >> 6;
+        let mut comb_filled = vec![0u64; filled_clen];
+        let mut filled_l1 = vec![0u64; filled_clen*k];
+        let mut filled_l2 = vec![0u64; filled_clen*k];
+        let mut expected_found = vec![];
+        let mut comb_start_pos = 0;
+        // TESTING!!!
         //if k < 5
         {
             let mut comb_iter = CombineIter::new(k, n);
@@ -496,7 +504,30 @@ fn calc_min_sumn_to_fill_par_all(n: usize) {
                     if found_count.fetch_add(1, atomic::Ordering::SeqCst) < max_result {
                         writeln!(io::stdout().lock(), "Result {}: {} {:?}", n, k, comb).unwrap();
                     }
+                    if k >= 3 {
+                        expected_found.push((comb[k-2], comb[k-1]));
+                    }
                 }
+                
+                // TESTING!!!
+                if k >= 3 {
+                    if comb[k-3]+1==comb[k-2] && comb[k-2]+2==comb[k-1] {
+                        init_sum_fill_diff_change(n, comb, &mut comb_filled,
+                                &mut filled_l1, &mut filled_l2);
+                        expected_found.clear();
+                        comb_start_pos = comb[k-2];
+                    }
+                    if n-2==comb[k-2] && n-1==comb[k-1] {
+                        let mut result_found = vec![];
+                        process_comb_l1l2(n, k, comb_start_pos, &comb_filled,
+                            &filled_l1, &filled_l2,
+                            |i,j| {
+                                result_found.push((i, j));
+                            });
+                        assert_eq!(expected_found, result_found);
+                    }
+                }
+                // TESTING!!!
                 
                 if !comb_iter.next() {
                     break;
@@ -565,7 +596,7 @@ fn calc_min_sumn_to_fill_par_all(n: usize) {
 }
 
 fn main() {
-    for i in 1..3000 {
+    for i in 1..100 {
         calc_min_sumn_to_fill_par_all(i);
     }
 }
