@@ -476,7 +476,7 @@ fn calc_min_sumn_to_fill_par_all(n: usize) {
                         let comb = parent_comb.iter().copied().chain(
                             comb_iter.get().iter().map(|x| *x + next_p))
                             .collect::<Vec<_>>();
-                        if (count & ((1 << 20) - 1)) == 0 {
+                        if (count & ((1 << 17) - 1)) == 0 {
                             writeln!(io::stderr().lock(),
                                      "ParProgress: {} {} {:?}", n, k, comb).unwrap();
                         }
