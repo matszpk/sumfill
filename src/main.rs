@@ -1,6 +1,5 @@
 use std::io::{self, Write};
-use std::sync::{atomic::{self, AtomicBool}, Arc, Mutex};
-use std::ops::Deref;
+use std::sync::{atomic::{self, AtomicU32}, Arc, Mutex};
 use rayon::prelude::*;
 mod utils;
 use utils::*;
@@ -346,7 +345,7 @@ fn calc_min_sumn_to_fill(n: usize, ks: usize) -> Option<Vec<usize>> {
         loop {
             let comb = comb_iter.get();
             if (count & ((1 << 20) - 1)) == 0 {
-                writeln!(io::stdout().lock(), "Progress: {} {} {:?}", n, k, comb);
+                writeln!(io::stdout().lock(), "Progress: {} {} {:?}", n, k, comb).unwrap();
             }
             if comb[0] != 0 || comb.get(1).copied().unwrap_or(1) != 1 {
                 break;
@@ -387,185 +386,137 @@ fn calc_min_sumn_to_fill(n: usize, ks: usize) -> Option<Vec<usize>> {
     None
 }
 
-// fn calc_min_sumn_to_fill_all(n: usize, ks: usize) -> Option<Vec<usize>> {
-//     for k in ks..64 {
-//         let mut comb_iter = CombineIter::new(k, n);
-//         let mut count = 0;
-//         loop {
-//             let comb = comb_iter.get();
-//             if (count & ((1 << 20) - 1)) == 0 {
-//                 writeln!(io::stdout().lock(), "Progress: {} {} {:?}", n, k, comb);
-//             }
-//             if comb[0] != 0 {
-//                 break;
-//             }
-//             // let mut filled = vec![false; n];
-//             // let mut numr_iter = CombineWithRepIter::new(k, k);
-//             // loop {
-//             //     let numc = numr_iter.get();
-//             //     //let sum = numc.iter().map(|x| comb[*x]).sum::<usize>() % n;
-//             //     let sum = numc.iter().map(|x| comb[*x]).fold(0, |a, x| {
-//             //         let a = a + x;
-//             //         if a >= n {
-//             //             a - n
-//             //         } else {
-//             //             a
-//             //         }
-//             //     });
-//             //     filled[sum] = true;
-//             //     if !numr_iter.next() {
-//             //         break;
-//             //     }
-//             // }
-//             
-//             let mut filled = vec![false; n];
-//             fill_sums(n, comb, &mut filled);
-//             //assert_eq!(filled, filled2);
-//             
-//             if filled.into_iter().all(|x| x) {
-//                 return Some(Vec::from(comb));
-//             }
-//             
-//             if !comb_iter.next() {
-//                 break;
-//             }
-//             count += 1;
-//         }
-//     }
-//     None
-// }
-
-// fn calc_min_sumn_to_fill_par(n: usize, ks: usize) -> Option<Vec<usize>> {
-//     for k in ks..64 {
-//         if k < 5 {
-//             let mut comb_iter = CombineIter::new(k, n);
-//             let mut count = 0;
-//             loop {
-//                 let comb = comb_iter.get();
-//                 if (count & ((1 << 20) - 1)) == 0 {
-//                     println!("Progress: {} {} {:?}", n, k, comb);
-//                 }
-//                 if comb[0] != 0 || comb.get(1).copied().unwrap_or(1) != 1 {
-//                     break;
-//                 }
-//                 // let mut filled = vec![false; n];
-//                 // let mut numr_iter = CombineWithRepIter::new(k, k);
-//                 // loop {
-//                 //     let numc = numr_iter.get();
-//                 //     //let sum = numc.iter().map(|x| comb[*x]).sum::<usize>() % n;
-//                 //     let sum = numc.iter().map(|x| comb[*x]).fold(0, |a, x| {
-//                 //         let a = a + x;
-//                 //         if a >= n {
-//                 //             a - n
-//                 //         } else {
-//                 //             a
-//                 //         }
-//                 //     });
-//                 //     filled[sum] = true;
-//                 //     if !numr_iter.next() {
-//                 //         break;
-//                 //     }
-//                 // }
-//                 
-//                 let mut filled = vec![false; n];
-//                 fill_sums(n, comb, &mut filled);
-//                 //assert_eq!(filled, filled2);
-//                 
-//                 if filled.into_iter().all(|x| x) {
-//                     return Some(Vec::from(comb));
-//                 }
-//                 
-//                 if !comb_iter.next() {
-//                     break;
-//                 }
-//                 count += 1;
-//             }
-//         } else {
-//             // let mut count = 0;
-//             // loop {
-//             // }
-//             const PAR_LEVEL: usize = 4;
-//             let found: Arc<Mutex<Option<Vec<usize>>>> = Arc::new(Mutex::new(None));
-//             CombineIterStd::new(PAR_LEVEL, n)
-//                 .par_bridge()
-//                 .for_each(|parent_comb| {
-//                     {
-//                         let found = found.lock().unwrap();
-//                         if found.deref().is_some() {
-//                             return;
-//                         }
-//                     }
-//                     
-//                     if parent_comb[0] != 0 || parent_comb.get(1).copied().unwrap_or(1) != 1 {
-//                         return;
-//                     }
-//                     println!("XXX: {:?}", parent_comb);
-//                     let next_p = parent_comb[PAR_LEVEL - 1] + 1;
-//                     
-//                     if k - PAR_LEVEL > n - next_p {
-//                         return;
-//                     }
-//                     let mut comb_iter = CombineIter::new(k - PAR_LEVEL, n - next_p);
-//                     let mut count = 0;
-//                     let mut filled = vec![false; n];
-//                     loop {
-//                         let comb = parent_comb.iter().copied().chain(
-//                             comb_iter.get().iter().map(|x| *x + next_p))
-//                             .collect::<Vec<_>>();
-//                         if (count & ((1 << 20) - 1)) == 0 {
-//                             println!("ParProgress: {} {} {:?}", n, k, comb);
-//                         }
-//                         // let mut filled = vec![false; n];
-//                         // let mut numr_iter = CombineWithRepIter::new(k, k);
-//                         // loop {
-//                         //     let numc = numr_iter.get();
-//                         //     //let sum = numc.iter().map(|x| comb[*x]).sum::<usize>() % n;
-//                         //     let sum = numc.iter().map(|x| comb[*x]).fold(0, |a, x| {
-//                         //         let a = a + x;
-//                         //         if a >= n {
-//                         //             a - n
-//                         //         } else {
-//                         //             a
-//                         //         }
-//                         //     });
-//                         //     filled[sum] = true;
-//                         //     if !numr_iter.next() {
-//                         //         break;
-//                         //     }
-//                         // }
-//                         
-//                         let mut filled = vec![false; n];
-//                         fill_sums(n, &comb, &mut filled);
-//                         //assert_eq!(filled, filled2);
-//                         
-//                         if filled.into_iter().all(|x| x) {
-//                             //return Some(Vec::from(comb));
-//                             let mut found = found.lock().unwrap();
-//                             if let Some(f) = found.deref() {
-//                                 *found = Some(std::cmp::min(f.clone(), Vec::from(comb)));
-//                             } else {
-//                                 *found = Some(Vec::from(comb));
-//                             }
-//                             return;
-//                         }
-//                         
-//                         if !comb_iter.next() {
-//                             break;
-//                         }
-//                         count += 1;
-//                     }
-//                 });
-//             
-//             if let Some(result) = found.lock().unwrap().deref() {
-//                 let mut filled = vec![false; n];
-//                 fill_sums(n, &result, &mut filled);
-//                 assert!(filled.into_iter().all(|x| x));
-//                 return Some(result.clone());
-//             };
-//         };
-//     }
-//     None
-// }
+fn calc_min_sumn_to_fill_par_all(n: usize) {
+    // find k_start
+    let ks = (1..64).find(|&x| {
+        let max_n = usize::try_from(combinations(x as u64, x+x-1 as u64)).unwrap();
+        //writeln!(io::stdout().lock(), "KSmax {}: {}", i, max_n);
+        max_n >= n
+    }).unwrap().try_into().unwrap();
+    
+    let max_result = std::cmp::max(u32::try_from(n).unwrap(), 100);
+    
+    for k in ks..64 {
+        let found_count = Arc::new(AtomicU32::new(0));
+        if k < 5 {
+            let mut comb_iter = CombineIter::new(k, n);
+            let mut count = 0;
+            loop {
+                let comb = comb_iter.get();
+                if (count & ((1 << 20) - 1)) == 0 {
+                    writeln!(io::stderr().lock(), "Progress: {} {} {:?}", n, k, comb).unwrap();
+                }
+                if comb[0] != 0 || comb.get(1).copied().unwrap_or(1) != 1 {
+                    break;
+                }
+                // let mut filled = vec![false; n];
+                // let mut numr_iter = CombineWithRepIter::new(k, k);
+                // loop {
+                //     let numc = numr_iter.get();
+                //     //let sum = numc.iter().map(|x| comb[*x]).sum::<usize>() % n;
+                //     let sum = numc.iter().map(|x| comb[*x]).fold(0, |a, x| {
+                //         let a = a + x;
+                //         if a >= n {
+                //             a - n
+                //         } else {
+                //             a
+                //         }
+                //     });
+                //     filled[sum] = true;
+                //     if !numr_iter.next() {
+                //         break;
+                //     }
+                // }
+                
+                let mut filled = vec![false; n];
+                fill_sums(n, comb, &mut filled);
+                //assert_eq!(filled, filled2);
+                
+                if filled.into_iter().all(|x| x) {
+                    writeln!(io::stdout().lock(), "Result {}: {} {:?}", n, k, comb).unwrap();
+                    if found_count.fetch_add(1, atomic::Ordering::SeqCst) >= max_result {
+                        return;
+                    }
+                }
+                
+                if !comb_iter.next() {
+                    break;
+                }
+                count += 1;
+            }
+        } else {
+            // let mut count = 0;
+            // loop {
+            // }
+            const PAR_LEVEL: usize = 4;
+            writeln!(io::stderr().lock(), "Tasks: {} {}", n, k).unwrap();
+            CombineIterStd::new(PAR_LEVEL, n)
+                .take_while(|parent_comb|
+                    parent_comb[0] == 0 && parent_comb[1] == 1 &&
+                    found_count.load(atomic::Ordering::SeqCst) <= max_result)
+                .par_bridge()
+                .for_each(|parent_comb| {
+                    let next_p = parent_comb[PAR_LEVEL - 1] + 1;
+                    
+                    if k - PAR_LEVEL > n - next_p {
+                        return;
+                    }
+                    let mut comb_iter = CombineIter::new(k - PAR_LEVEL, n - next_p);
+                    let mut count = 1;
+                    loop {
+                        let comb = parent_comb.iter().copied().chain(
+                            comb_iter.get().iter().map(|x| *x + next_p))
+                            .collect::<Vec<_>>();
+                        if (count & ((1 << 20) - 1)) == 0 {
+                            writeln!(io::stderr().lock(),
+                                     "ParProgress: {} {} {:?}", n, k, comb).unwrap();
+                        }
+                        // let mut filled = vec![false; n];
+                        // let mut numr_iter = CombineWithRepIter::new(k, k);
+                        // loop {
+                        //     let numc = numr_iter.get();
+                        //     //let sum = numc.iter().map(|x| comb[*x]).sum::<usize>() % n;
+                        //     let sum = numc.iter().map(|x| comb[*x]).fold(0, |a, x| {
+                        //         let a = a + x;
+                        //         if a >= n {
+                        //             a - n
+                        //         } else {
+                        //             a
+                        //         }
+                        //     });
+                        //     filled[sum] = true;
+                        //     if !numr_iter.next() {
+                        //         break;
+                        //     }
+                        // }
+                        
+                        let mut filled = vec![false; n];
+                        fill_sums(n, &comb, &mut filled);
+                        //assert_eq!(filled, filled2);
+                        
+                        if filled.into_iter().all(|x| x) {
+                            if found_count.load(atomic::Ordering::SeqCst) > max_result {
+                                return;
+                            }
+                            writeln!(io::stdout().lock(),
+                                     "Result {}: {} {:?}", n, k, comb).unwrap();
+                            if found_count.fetch_add(1, atomic::Ordering::SeqCst) >= max_result {
+                                return;
+                            }
+                        }
+                        
+                        if !comb_iter.next() {
+                            break;
+                        }
+                        count += 1;
+                    }
+                });
+        };
+        if found_count.load(atomic::Ordering::SeqCst) != 0 {
+            break;
+        }
+    }
+}
 
 fn main() {
     // let mut comb_iter = CombineWithRepIter::new(4, 7);
@@ -575,28 +526,24 @@ fn main() {
     //         break;
     //     }
     // }
-    let mut k = 1;
-    // for i in 1..300 {
-    //     if let Some(comb) = calc_min_sumn_to_fill_par(i, k) {
-    //         println!("Result {}: {} {:?}", i, comb.len(), comb);
-    //         k = std::cmp::max(1, comb.len()-1);
-    //     }
-    // }
+    for i in 1..3000 {
+        calc_min_sumn_to_fill_par_all(i);
+    }
     
-    (601..=1000).into_par_iter().for_each(|i| {
-        // find k_start
-        let ks = (1..64).find(|&x| {
-            let max_n = usize::try_from(combinations(x as u64, x+x-1 as u64)).unwrap();
-            //writeln!(io::stdout().lock(), "KSmax {}: {}", i, max_n);
-            max_n >= i
-        }).unwrap().try_into().unwrap();
-        //writeln!(io::stdout().lock(), "KS {}: {}", i, ks);
-        
-        if let Some(comb) = calc_min_sumn_to_fill(i, ks) {
-            writeln!(io::stdout().lock(), "Result {}: {} {:?}", i, comb.len(), comb);
-            //k = std::cmp::max(1, comb.len()-1);
-        }
-    });
+//     (601..=1000).into_par_iter().for_each(|i| {
+//         // find k_start
+//         let ks = (1..64).find(|&x| {
+//             let max_n = usize::try_from(combinations(x as u64, x+x-1 as u64)).unwrap();
+//             //writeln!(io::stdout().lock(), "KSmax {}: {}", i, max_n);
+//             max_n >= i
+//         }).unwrap().try_into().unwrap();
+//         //writeln!(io::stdout().lock(), "KS {}: {}", i, ks);
+//         
+//         if let Some(comb) = calc_min_sumn_to_fill(i, ks) {
+//             writeln!(io::stdout().lock(), "Result {}: {} {:?}", i, comb.len(), comb).unwrap();
+//             //k = std::cmp::max(1, comb.len()-1);
+//         }
+//     });
     
 //     (251..=462).into_par_iter().for_each(|i| {
 //         // find k_start
