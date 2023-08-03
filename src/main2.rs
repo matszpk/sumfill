@@ -84,18 +84,22 @@ fn init_sum_fill_diff_change(n: usize, comb: &[usize], comb_filled: &mut [u64],
 fn shift_filled_lx(len: usize, k: usize, filled_l1: &mut [u64], fix_sh: usize, stride: usize) {
     for i in 0..k {
         let filled = &mut filled_l1[len*stride*i..len*(stride*i+1)];
-        let shift = k+1;
+        let shift = i+1;
         let mut vprev = filled[len-1];
-        for j in 0..len-1 {
-            let vcur = filled[j+1];
-            filled[j+1] = (vcur << shift) | (vprev >> (64-shift));
+        // println!("Before {}: {:?}", shift, filled
+        //     .iter().map(|x| format!("{:064b}", *x)).collect::<Vec<_>>());
+        for j in 0..len {
+            let vcur = filled[j];
+            filled[j] = (vcur << shift) | (vprev >> (64-shift));
             vprev = vcur;
         }
         if fix_sh != 0 {
             let mask = (1u64 << fix_sh) - 1;
             // fix first bits
-            filled[0] = (filled[0] & !mask) | ((filled[0] & mask) << (fix_sh - shift));
+            filled[0] = (filled[0] & !mask) | ((filled[0] & mask) << fix_sh);
         }
+        // println!("After  {}: {:?}", shift, filled
+        //     .iter().map(|x| format!("{:064b}", *x)).collect::<Vec<_>>());
     }
 }
 
