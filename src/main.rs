@@ -1,5 +1,6 @@
 use std::io::{self, Write};
 use std::sync::{atomic::{self, AtomicU32}, Arc, Mutex};
+use std::time::Instant;
 use rayon::prelude::*;
 mod utils;
 use utils::*;
@@ -450,12 +451,20 @@ fn calc_min_sumn_to_fill_par_all(n: usize) {
             // }
             const PAR_LEVEL: usize = 4;
             writeln!(io::stderr().lock(), "Tasks: {} {}", n, k).unwrap();
+            
+            let time = Instant::now();
+            
             CombineIterStd::new(PAR_LEVEL, n)
                 .take_while(|parent_comb|
                     parent_comb[0] == 0 && parent_comb[1] == 1 &&
                     found_count.load(atomic::Ordering::SeqCst) <= max_result)
                 .par_bridge()
                 .for_each(|parent_comb| {
+                    if (time.elapsed().as_millis() % 1000 == 0) {
+                        writeln!(io::stderr().lock(), "Task: {} {} {:?}", n, k,
+                                 parent_comb).unwrap();
+                    }
+                    
                     let next_p = parent_comb[PAR_LEVEL - 1] + 1;
                     
                     if k - PAR_LEVEL > n - next_p {
