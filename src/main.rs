@@ -1,5 +1,5 @@
 use std::io::{self, Write};
-use std::sync::{atomic::{self, AtomicU32}, Arc, Mutex};
+use std::sync::{atomic::{self, AtomicU32}, Arc};
 use std::time::Instant;
 use rayon::prelude::*;
 mod utils;
@@ -395,7 +395,8 @@ fn calc_min_sumn_to_fill_par_all(n: usize) {
         max_n >= n
     }).unwrap().try_into().unwrap();
     
-    let max_result = std::cmp::max(u32::try_from(n).unwrap(), 100);
+    let nsq = u32::try_from(n*n).unwrap();
+    let max_result = std::cmp::max(nsq, 100);
     
     for k in ks..64 {
         let found_count = Arc::new(AtomicU32::new(0));
@@ -460,7 +461,7 @@ fn calc_min_sumn_to_fill_par_all(n: usize) {
                     found_count.load(atomic::Ordering::SeqCst) <= max_result)
                 .par_bridge()
                 .for_each(|parent_comb| {
-                    if (time.elapsed().as_millis() % 1000 < 50) {
+                    if time.elapsed().as_millis() % 1000 < 50 {
                         writeln!(io::stderr().lock(), "Task: {} {} {:?}", n, k,
                                  parent_comb).unwrap();
                     }
@@ -476,7 +477,7 @@ fn calc_min_sumn_to_fill_par_all(n: usize) {
                         let comb = parent_comb.iter().copied().chain(
                             comb_iter.get().iter().map(|x| *x + next_p))
                             .collect::<Vec<_>>();
-                        if (count & ((1 << 17) - 1)) == 0 {
+                        if (count & ((1 << 18) - 1)) == 0 {
                             writeln!(io::stderr().lock(),
                                      "ParProgress: {} {} {:?}", n, k, comb).unwrap();
                         }
