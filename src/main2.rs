@@ -96,7 +96,11 @@ fn shift_filled_lx(len: usize, k: usize, filled_l1: &mut [u64], fix_sh: usize, s
         if fix_sh != 0 {
             let mask = (1u64 << fix_sh) - 1;
             // fix first bits
-            filled[0] = (filled[0] & !mask) | ((filled[0] & mask) << fix_sh);
+            let vold = filled[0] & mask;
+            filled[0] = (filled[0] & !mask) | (vold << fix_sh);
+            if (64 - fix_sh) < k {
+                filled[1] |= vold >> (64-fix_sh);
+            }
         }
         // println!("After  {}: {:?}", shift, filled
         //     .iter().map(|x| format!("{:064b}", *x)).collect::<Vec<_>>());
@@ -141,15 +145,15 @@ fn process_comb_l1l2(n: usize, k: usize, start: usize, comb_filled: &[u64],
     let mut l2_filled_l2 = l1_filled_l2_templ.clone();
     for i in start..n-1 {
         apply_filled_lx(filled_clen, k, &l1_filled_l1, &comb_filled, &mut l1_filled, 1);
-        // println!("CombFilled: {} {}: {} {:?}", n, k, i, comb_filled
-        //     .iter().map(|x| format!("{:064b}", *x)).collect::<Vec<_>>()
-        // );
-        // println!("L1FilledL1: {} {}: {} {:?}", n, k, i, l1_filled_l1
-        //     .iter().map(|x| format!("{:064b}", *x)).collect::<Vec<_>>()
-        // );
-        // println!("L1Filled: {} {}: {} {:?}", n, k, i, l1_filled
-        //     .iter().map(|x| format!("{:064b}", *x)).collect::<Vec<_>>()
-        // );
+        println!("CombFilled: {} {}: {} {:?}", n, k, i, comb_filled
+            .iter().map(|x| format!("{:064b}", *x)).collect::<Vec<_>>()
+        );
+        println!("L1FilledL1: {} {}: {} {:?}", n, k, i, l1_filled_l1
+            .iter().map(|x| format!("{:064b}", *x)).collect::<Vec<_>>()
+        );
+        println!("L1Filled: {} {}: {} {:?}", n, k, i, l1_filled
+            .iter().map(|x| format!("{:064b}", *x)).collect::<Vec<_>>()
+        );
         // apply l1l2 to l1_filled_l2_templ -> l2_filled_l2
         for j in 0..k {
             apply_filled_lx(filled_clen, k,
@@ -157,9 +161,18 @@ fn process_comb_l1l2(n: usize, k: usize, start: usize, comb_filled: &[u64],
                             &l1_filled_l2_templ[filled_clen*j..filled_clen*(j+1)],
                             &mut l2_filled_l2[filled_clen*j..filled_clen*(j+1)], k);
         }
+        println!("L2FilledL2: {} {}: {} {:?}", n, k, i, l2_filled_l2
+            .iter().map(|x| format!("{:064b}", *x)).collect::<Vec<_>>()
+        );
         // apply to comb_filled
         for j in i+1..n {
+            println!("L2FilledL2: {} {}: {} {} {:?}", n, k, i, j, l2_filled_l2
+                .iter().map(|x| format!("{:064b}", *x)).collect::<Vec<_>>()
+            );
             apply_filled_lx(filled_clen, k, &l2_filled_l2, &l1_filled, &mut l2_filled, 1);
+            println!("L2Filled: {} {}: {} {} {:?}", n, k, i, j, l2_filled
+                .iter().map(|x| format!("{:064b}", *x)).collect::<Vec<_>>()
+            );
             if check_all_filled(&l2_filled, fix_sh) {
                 found_call(i, j);
             }
@@ -579,6 +592,7 @@ fn calc_min_sumn_to_fill_par_all(n: usize) {
                 if k >= 3 {
                     if n-2==comb[k-2] && n-1==comb[k-1] {
                         let mut result_found = vec![];
+                        println!("TestEnd {:?}", comb);
                         process_comb_l1l2(n, k, comb_start_pos, &comb_filled,
                             &filled_l1, &filled_l1l2, &filled_l2,
                             |i,j| {
