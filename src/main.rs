@@ -395,7 +395,7 @@ fn calc_min_sumn_to_fill_par_all(n: usize) {
         max_n >= n
     }).unwrap().try_into().unwrap();
     
-    let nsq = u32::try_from(n*n).unwrap();
+    let nsq = u32::try_from((n*n)/10).unwrap();
     let max_result = std::cmp::max(nsq, 100);
     
     for k in ks..64 {
