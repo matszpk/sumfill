@@ -45,16 +45,21 @@ fn init_sum_fill_diff_change(n: usize, comb: &[usize], comb_filled: &mut [u64],
             }
         }
         if l1count == 0 && l2count == 0 {
+            println!("ToC: {} {} {:?}: {:?} {}", n, k, comb, numc, sum);
             comb_filled[fixsum >> 6] |= 1u64 << (fixsum & 63);
         } else {
             if l1count != 0 {
                 if l2count == 0 {
+                    println!("ToL1 {}: {} {} {:?}: {:?} {}", l1count, n, k, comb, numc, sum);
                     filled_l1[filled_clen*(l1count-1) + (fixsum >> 6)] |= 1u64 << (fixsum & 63);
                 } else {
+                    println!("ToL1L2 {} {}: {} {} {:?}: {:?} {}", l1count, l2count,
+                             n, k, comb, numc, sum);
                     filled_l1l2[filled_clen*(k*(l1count-1) + (l2count-1)) + (fixsum >> 6)] |=
                         1u64 << (fixsum & 63);
                 }
             } else if l2count != 0 {
+                println!("ToL2 {}: {} {} {:?}: {:?} {}", l2count, n, k, comb, numc, sum);
                 filled_l2[filled_clen*(l2count-1) + (fixsum >> 6)] |= 1u64 << (fixsum & 63);
             }
         }
@@ -536,7 +541,7 @@ fn calc_min_sumn_to_fill_par_all(n: usize) {
                 
                 // TESTING!!!
                 if k >= 3 {
-                    if comb[k-3]+1==comb[k-2] && comb[k-2]+2==comb[k-1] {
+                    if comb[k-3]+1==comb[k-2] && comb[k-3]+2==comb[k-1] {
                         init_sum_fill_diff_change(n, comb, &mut comb_filled,
                                 &mut filled_l1, &mut filled_l1l2, &mut filled_l2);
                         expected_found.clear();
