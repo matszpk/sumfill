@@ -480,6 +480,9 @@ fn calc_min_sumn_to_fill_par_all(n: usize) {
                         if (count & ((1 << 18) - 1)) == 0 {
                             writeln!(io::stderr().lock(),
                                      "ParProgress: {} {} {:?}", n, k, comb).unwrap();
+                            if found_count.load(atomic::Ordering::SeqCst) > max_result {
+                                return;
+                            }
                         }
                         // let mut filled = vec![false; n];
                         // let mut numr_iter = CombineWithRepIter::new(k, k);
