@@ -48,7 +48,6 @@ fn init_sum_fill_diff_change(n: usize, comb: &[usize], comb_filled: &mut [u64],
             comb_filled[fixsum >> 6] |= 1u64 << (fixsum & 63);
         } else {
             if l1count != 0 && l2count == 0 {
-                println!("XCC: {} {} {}", fixsum, l1count, filled_clen);
                 filled_l1[filled_clen*(l1count-1) + (fixsum >> 6)] |= 1u64 << (fixsum & 63);
             } else if l2count != 0 {
                 filled_l2[filled_clen*(l2count-1) + (fixsum >> 6)] |= 1u64 << (fixsum & 63);
@@ -115,9 +114,9 @@ fn process_comb_l1l2(n: usize, k: usize, start: usize, comb_filled: &[u64],
     let mut l2_filled_l2 = l1_filled_l2.clone();
     for i in start..n-1 {
         l2_filled_l2.copy_from_slice(&l1_filled_l2);
-        apply_filled_lx(n, k, &l1_filled_l1, &comb_filled, &mut l1_filled);
+        apply_filled_lx(filled_clen, k, &l1_filled_l1, &comb_filled, &mut l1_filled);
         for j in i+1..n {
-            apply_filled_lx(n, k, &l2_filled_l2, &l1_filled, &mut l2_filled);
+            apply_filled_lx(filled_clen, k, &l2_filled_l2, &l1_filled, &mut l2_filled);
             if check_all_filled(&l2_filled, fix_sh) {
                 found_call(i, j);
             }
