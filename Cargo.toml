@@ -3,5 +3,13 @@ name = "sumfill"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "sumfill"
+path = "src/main.rs"
+
+[[bin]]
+name = "sumfill2"
+path = "src/main2.rs"
+
 [dependencies]
 rayon = "1.6"
