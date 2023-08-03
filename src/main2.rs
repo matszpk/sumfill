@@ -45,21 +45,21 @@ fn init_sum_fill_diff_change(n: usize, comb: &[usize], comb_filled: &mut [u64],
             }
         }
         if l1count == 0 && l2count == 0 {
-            println!("ToC: {} {} {:?}: {:?} {}", n, k, comb, numc, sum);
+            //println!("ToC: {} {} {:?}: {:?} {}", n, k, comb, numc, sum);
             comb_filled[fixsum >> 6] |= 1u64 << (fixsum & 63);
         } else {
             if l1count != 0 {
                 if l2count == 0 {
-                    println!("ToL1 {}: {} {} {:?}: {:?} {}", l1count, n, k, comb, numc, sum);
+                    // println!("ToL1 {}: {} {} {:?}: {:?} {}", l1count, n, k, comb, numc, sum);
                     filled_l1[filled_clen*(l1count-1) + (fixsum >> 6)] |= 1u64 << (fixsum & 63);
                 } else {
-                    println!("ToL1L2 {} {}: {} {} {:?}: {:?} {}", l1count, l2count,
-                             n, k, comb, numc, sum);
+                    // println!("ToL1L2 {} {}: {} {} {:?}: {:?} {}", l1count, l2count,
+                    //          n, k, comb, numc, sum);
                     filled_l1l2[filled_clen*(k*(l1count-1) + (l2count-1)) + (fixsum >> 6)] |=
                         1u64 << (fixsum & 63);
                 }
             } else if l2count != 0 {
-                println!("ToL2 {}: {} {} {:?}: {:?} {}", l2count, n, k, comb, numc, sum);
+                // println!("ToL2 {}: {} {} {:?}: {:?} {}", l2count, n, k, comb, numc, sum);
                 filled_l2[filled_clen*(l2count-1) + (fixsum >> 6)] |= 1u64 << (fixsum & 63);
             }
         }
@@ -67,6 +67,18 @@ fn init_sum_fill_diff_change(n: usize, comb: &[usize], comb_filled: &mut [u64],
             break;
         }
     }
+    // println!("FilledC: {} {} {:?}: {:?}", n, k, comb, comb_filled
+    //     .iter().map(|x| format!("{:064b}", *x)).collect::<Vec<_>>()
+    // );
+    // println!("FilledL1: {} {} {:?}: {:?}", n, k, comb, filled_l1
+    //     .iter().map(|x| format!("{:064b}", *x)).collect::<Vec<_>>()
+    // );
+    // println!("FilledL1L2: {} {} {:?}: {:?}", n, k, comb, filled_l1l2
+    //     .iter().map(|x| format!("{:064b}", *x)).collect::<Vec<_>>()
+    // );
+    // println!("FilledL2: {} {} {:?}: {:?}", n, k, comb, filled_l2
+    //     .iter().map(|x| format!("{:064b}", *x)).collect::<Vec<_>>()
+    // );
 }
 
 fn shift_filled_lx(len: usize, k: usize, filled_l1: &mut [u64], fix_sh: usize, stride: usize) {
@@ -101,10 +113,10 @@ fn apply_filled_lx(len: usize, k: usize, filled_l1: &[u64], comb_filled: &[u64],
 #[inline]
 fn check_all_filled(filled: &[u64], fix_sh: usize) -> bool {
     if fix_sh != 0 {
-        filled.iter().all(|x| *x == u64::MAX)
-    } else {
         filled[0] == (!((1u64 << fix_sh) - 1)) &&
             filled[1..].iter().all(|x| *x == u64::MAX)
+    } else {
+        filled.iter().all(|x| *x == u64::MAX)
     }
 }
 
@@ -125,6 +137,15 @@ fn process_comb_l1l2(n: usize, k: usize, start: usize, comb_filled: &[u64],
     let mut l2_filled_l2 = l1_filled_l2_templ.clone();
     for i in start..n-1 {
         apply_filled_lx(filled_clen, k, &l1_filled_l1, &comb_filled, &mut l1_filled, 1);
+        // println!("CombFilled: {} {}: {} {:?}", n, k, i, comb_filled
+        //     .iter().map(|x| format!("{:064b}", *x)).collect::<Vec<_>>()
+        // );
+        // println!("L1FilledL1: {} {}: {} {:?}", n, k, i, l1_filled_l1
+        //     .iter().map(|x| format!("{:064b}", *x)).collect::<Vec<_>>()
+        // );
+        // println!("L1Filled: {} {}: {} {:?}", n, k, i, l1_filled
+        //     .iter().map(|x| format!("{:064b}", *x)).collect::<Vec<_>>()
+        // );
         // apply l1l2 to l1_filled_l2_templ -> l2_filled_l2
         for j in 0..k {
             apply_filled_lx(filled_clen, k,
@@ -530,6 +551,17 @@ fn calc_min_sumn_to_fill_par_all(n: usize) {
                 fill_sums(n, comb, &mut filled);
                 //assert_eq!(filled, filled2);
                 
+                // TESTING!!!
+                if k >= 3 {
+                    if comb[k-3]+1==comb[k-2] && comb[k-3]+2==comb[k-1] {
+                        init_sum_fill_diff_change(n, comb, &mut comb_filled,
+                                &mut filled_l1, &mut filled_l1l2, &mut filled_l2);
+                        expected_found.clear();
+                        comb_start_pos = comb[k-2];
+                    }
+                }
+                // TESTING!!!
+                
                 if filled.into_iter().all(|x| x) {
                     if found_count.fetch_add(1, atomic::Ordering::SeqCst) < max_result {
                         writeln!(io::stdout().lock(), "Result {}: {} {:?}", n, k, comb).unwrap();
@@ -541,12 +573,6 @@ fn calc_min_sumn_to_fill_par_all(n: usize) {
                 
                 // TESTING!!!
                 if k >= 3 {
-                    if comb[k-3]+1==comb[k-2] && comb[k-3]+2==comb[k-1] {
-                        init_sum_fill_diff_change(n, comb, &mut comb_filled,
-                                &mut filled_l1, &mut filled_l1l2, &mut filled_l2);
-                        expected_found.clear();
-                        comb_start_pos = comb[k-2];
-                    }
                     if n-2==comb[k-2] && n-1==comb[k-1] {
                         let mut result_found = vec![];
                         process_comb_l1l2(n, k, comb_start_pos, &comb_filled,
