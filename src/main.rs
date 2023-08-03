@@ -460,7 +460,7 @@ fn calc_min_sumn_to_fill_par_all(n: usize) {
                     found_count.load(atomic::Ordering::SeqCst) <= max_result)
                 .par_bridge()
                 .for_each(|parent_comb| {
-                    if (time.elapsed().as_millis() % 10000 < 50) {
+                    if (time.elapsed().as_millis() % 1000 < 50) {
                         writeln!(io::stderr().lock(), "Task: {} {} {:?}", n, k,
                                  parent_comb).unwrap();
                     }
