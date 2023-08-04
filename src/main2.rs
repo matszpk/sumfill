@@ -46,22 +46,15 @@ fn init_sum_fill_diff_change(n: usize, comb: &[usize], comb_filled: &mut [u64],
             }
         }
         if l1count == 0 && l2count == 0 {
-            //println!("ToC: {} {} {:?}: {:?} {}", n, k, comb, numc, sum);
             comb_filled[fixsum >> 6] |= 1u64 << (fixsum & 63);
         } else {
             if l1count != 0 {
                 if l2count == 0 {
-                    // println!("ToL1 {}: {} {} {:?}: {:?} {}", l1count, n, k, comb, numc, sum);
                     filled_l1[filled_clen*(l1count-1) + (fixsum >> 6)] |= 1u64 << (fixsum & 63);
                 } else {
-                    // println!("ToL1L2 {} {}: {} {} {:?}: {:?} {}", l1count, l2count,
-                    //          n, k, comb, numc, sum);
-                    // filled_l1l2[filled_clen*(k*(l1count-1) + (l2count-1)) + (fixsum >> 6)] |=
-                    //     1u64 << (fixsum & 63);
                     filled_l1l2_sums[k*(l1count-1) + (l2count-1)].push(sum);
                 }
             } else if l2count != 0 {
-                // println!("ToL2 {}: {} {} {:?}: {:?} {}", l2count, n, k, comb, numc, sum);
                 filled_l2[filled_clen*(l2count-1) + (fixsum >> 6)] |= 1u64 << (fixsum & 63);
             }
         }
@@ -69,18 +62,6 @@ fn init_sum_fill_diff_change(n: usize, comb: &[usize], comb_filled: &mut [u64],
             break;
         }
     }
-    // println!("FilledC: {} {} {:?}: {:?}", n, k, comb, comb_filled
-    //     .iter().map(|x| format!("{:064b}", *x)).collect::<Vec<_>>()
-    // );
-    // println!("FilledL1: {} {} {:?}: {:?}", n, k, comb, filled_l1
-    //     .iter().map(|x| format!("{:064b}", *x)).collect::<Vec<_>>()
-    // );
-    // println!("FilledL1L2: {} {} {:?}: {:?}", n, k, comb, filled_l1l2
-    //     .iter().map(|x| format!("{:064b}", *x)).collect::<Vec<_>>()
-    // );
-    // println!("FilledL2: {} {} {:?}: {:?}", n, k, comb, filled_l2
-    //     .iter().map(|x| format!("{:064b}", *x)).collect::<Vec<_>>()
-    // );
 }
 
 fn shift_filled_lx(len: usize, k: usize, filled_l1: &mut [u64], fix_sh: usize, stride: usize) {
@@ -88,8 +69,6 @@ fn shift_filled_lx(len: usize, k: usize, filled_l1: &mut [u64], fix_sh: usize, s
         let filled = &mut filled_l1[len*stride*i..len*(stride*i+1)];
         let shift = i+1;
         let mut vprev = filled[len-1];
-        // println!("Before {}: {:?}", shift, filled
-        //     .iter().map(|x| format!("{:064b}", *x)).collect::<Vec<_>>());
         for j in 0..len {
             let vcur = filled[j];
             filled[j] = (vcur << shift) | (vprev >> (64-shift));
@@ -104,8 +83,6 @@ fn shift_filled_lx(len: usize, k: usize, filled_l1: &mut [u64], fix_sh: usize, s
                 filled[1] |= vold >> (64-fix_sh);
             }
         }
-        // println!("After  {}: {:?}", shift, filled
-        //     .iter().map(|x| format!("{:064b}", *x)).collect::<Vec<_>>());
     }
 }
 
@@ -147,29 +124,7 @@ fn process_comb_l1l2(n: usize, k: usize, start: usize, comb_filled: &[u64],
     let mut l2_filled_l2 = l1_filled_l2_templ.clone();
     for i in start..n-1 {
         apply_filled_lx(filled_clen, k, &l1_filled_l1, &comb_filled, &mut l1_filled, 1);
-        // println!("CombFilled: {} {}: {} {:?}", n, k, i, comb_filled
-        //     .iter().map(|x| format!("{:064b}", *x)).collect::<Vec<_>>()
-        // );
-        // println!("L1FilledL1: {} {}: {} {:?}", n, k, i, l1_filled_l1
-        //     .iter().map(|x| format!("{:064b}", *x)).collect::<Vec<_>>()
-        // );
-        // println!("L1Filled: {} {}: {} {:?}", n, k, i, l1_filled
-        //     .iter().map(|x| format!("{:064b}", *x)).collect::<Vec<_>>()
-        // );
-        // println!("L2FilledL2Templ: {} {}: {} {:?}", n, k, i, l1_filled_l2_templ
-        //     .iter().map(|x| format!("{:064b}", *x)).collect::<Vec<_>>()
-        // );
-        // println!("L2FilledL1L2: {} {}: {} {:?}", n, k, i, l1_filled_l1l2
-        //     .iter().map(|x| format!("{:064b}", *x)).collect::<Vec<_>>()
-        // );
-        // apply l1l2 to l1_filled_l2_templ -> l2_filled_l2
         
-        // for j in 0..k {
-        //     apply_filled_lx(filled_clen, k,
-        //                     &l1_filled_l1l2[filled_clen*j..filled_clen*(k*(k-1)+j+1)],
-        //                     &l1_filled_l2_templ[filled_clen*j..filled_clen*(j+1)],
-        //                     &mut l2_filled_l2[filled_clen*j..filled_clen*(j+1)], k);
-        // }
         l2_filled_l2.copy_from_slice(&l1_filled_l2_templ);
         for j0 in 0..k {
             for j1 in 0..(k-j0) {
@@ -180,18 +135,9 @@ fn process_comb_l1l2(n: usize, k: usize, start: usize, comb_filled: &[u64],
             }
         }
         
-        // println!("L2FilledL2: {} {}: {} {:?}", n, k, i, l2_filled_l2
-        //     .iter().map(|x| format!("{:064b}", *x)).collect::<Vec<_>>()
-        // );
         // apply to comb_filled
         for j in i+1..n {
-            // println!("L2FilledL2: {} {}: {} {} {:?}", n, k, i, j, l2_filled_l2
-            //     .iter().map(|x| format!("{:064b}", *x)).collect::<Vec<_>>()
-            // );
             apply_filled_lx(filled_clen, k, &l2_filled_l2, &l1_filled, &mut l2_filled, 1);
-            // println!("L2Filled: {} {}: {} {} {:?}", n, k, i, j, l2_filled
-            //     .iter().map(|x| format!("{:064b}", *x)).collect::<Vec<_>>()
-            // );
             if check_all_filled(&l2_filled, fix_sh) {
                 found_call(i, j);
             }
@@ -199,17 +145,6 @@ fn process_comb_l1l2(n: usize, k: usize, start: usize, comb_filled: &[u64],
         }
         // shift l1
         shift_filled_lx(filled_clen, k, &mut l1_filled_l1, fix_sh, 1);
-        // shift l1l2: for l1 elems and l1l2 for elements l1 and l2
-        // for j in 0..k {
-        //     // l1 elements
-        //     shift_filled_lx(filled_clen, k,
-        //                     &mut l1_filled_l1l2[filled_clen*j..filled_clen*(k*(k-1)+j+1)],
-        //                     fix_sh, k);
-        //     // l2 elements
-        //     shift_filled_lx(filled_clen, k,
-        //                     &mut l1_filled_l1l2[filled_clen*k*j..filled_clen*k*(j+1)],
-        //                     fix_sh, 1);
-        // }
         for j0 in 0..k {
             for j1 in 0..(k-j0) {
                 l1_filled_l1l2_sums[j0*k + j1].iter_mut().for_each(|sum| {
