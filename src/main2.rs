@@ -814,7 +814,7 @@ fn calc_min_sumn_to_fill_par_all_2(n: usize) {
                 count += 1;
             }
         } else {
-            let par_level: usize = if k > 5 {
+            let par_level: usize = if k > 6 {
                 4
             } else {
                 3
@@ -848,9 +848,6 @@ fn calc_min_sumn_to_fill_par_all_2(n: usize) {
                     let mut final_comb = vec![0; k];
                     
                     loop {
-                        // let comb = parent_comb.iter().copied().chain(
-                        //     comb_iter.get().iter().map(|x| *x + next_p))
-                        //     .collect::<Vec<_>>();
                         final_comb[0..par_level].copy_from_slice(&parent_comb);
                         {
                             let comb = comb_iter.get();
