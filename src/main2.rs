@@ -95,7 +95,12 @@ fn shift_filled_lx(len: usize, k: usize, filled_l1: &mut [u64], fix_sh: usize, s
             vprev = vcur;
         }
         if fix_sh != 0 {
-            let mask = (1u64 << fix_sh) - 1;
+            let maskbits = if fix_sh > shift {
+                fix_sh
+            } else {
+                shift
+            };
+            let mask = (1u64 << maskbits) - 1;
             // fix first bits
             let vold = filled[0] & mask;
             filled[0] = (filled[0] & !mask) | (vold << fix_sh);
@@ -599,7 +604,7 @@ fn calc_min_sumn_to_fill_par_all(n: usize) {
                 if k >= 3 {
                     if n-2==comb[k-2] && n-1==comb[k-1] {
                         let mut result_found = vec![];
-                        println!("TestEnd {:?}", comb);
+                        //println!("TestEnd {:?}", comb);
                         process_comb_l1l2(n, k, comb_start_pos, &comb_filled,
                             &filled_l1, &filled_l1l2, &filled_l2,
                             |i,j| {
