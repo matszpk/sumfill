@@ -95,12 +95,7 @@ fn shift_filled_lx(len: usize, k: usize, filled_l1: &mut [u64], fix_sh: usize, s
             vprev = vcur;
         }
         if fix_sh != 0 {
-            let maskbits = if fix_sh > shift {
-                fix_sh
-            } else {
-                shift
-            };
-            let mask = (1u64 << maskbits) - 1;
+            let mask = (1u64 << shift) - 1;
             // fix first bits
             let vold = filled[0] & mask;
             filled[0] = (filled[0] & !mask) | (vold << fix_sh);
@@ -682,7 +677,7 @@ fn calc_min_sumn_to_fill_par_all(n: usize) {
 }
 
 fn main() {
-    for i in 1..100 {
+    for i in 1..192 {
         calc_min_sumn_to_fill_par_all(i);
     }
 }
