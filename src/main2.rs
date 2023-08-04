@@ -822,14 +822,18 @@ fn calc_min_sumn_to_fill_par_all_2(n: usize) {
             writeln!(io::stderr().lock(), "Tasks: {} {}", n, k).unwrap();
             
             let time = Instant::now();
+            let last_time = Arc::new(AtomicU64::new(time.elapsed().as_secs()));
             
             CombineIterStd::new(par_level, n)
                 .take_while(|parent_comb| parent_comb[0] == 0 && parent_comb[1] == 1)
                 .par_bridge()
                 .for_each(|parent_comb| {
-                    if time.elapsed().as_millis() % 1000 < 50 {
+                    //if time.elapsed().as_millis() % 1000 < 50 {
+                    if last_time.load(atomic::Ordering::SeqCst) + 1 <=
+                        time.elapsed().as_secs() {
                         writeln!(io::stderr().lock(), "Task: {} {} {:?}", n, k,
                                  parent_comb).unwrap();
+                        last_time.fetch_max(time.elapsed().as_secs(), atomic::Ordering::SeqCst);
                     }
                     
                     let next_p = parent_comb[par_level - 1] + 1;
