@@ -79,7 +79,7 @@ fn shift_filled_lx(len: usize, k: usize, filled_l1: &mut [u64], fix_sh: usize, s
             // fix first bits
             let vold = filled[0] & mask;
             filled[0] = (filled[0] & !mask) | (vold << fix_sh);
-            if (64 - fix_sh) < k {
+            if (64 - fix_sh) < shift {
                 filled[1] |= vold >> (64-fix_sh);
             }
         }
