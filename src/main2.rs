@@ -490,7 +490,7 @@ fn fill_sums(n: usize, comb: &[usize], filled: &mut [bool]) {
     }
 }
 
-fn calc_min_sumn_to_fill_par_all(n: usize) {
+fn calc_min_sumn_to_fill_par_all_test(n: usize) {
     // find k_start
     let ks = (1..64).find(|&x| {
         let max_n = usize::try_from(combinations(x as u64, x+x-1 as u64)).unwrap();
@@ -509,7 +509,7 @@ fn calc_min_sumn_to_fill_par_all(n: usize) {
         let mut filled_l1 = vec![0u64; filled_clen*k];
         let mut filled_l1l2_sums = vec![vec![]; k*k];
         let mut filled_l2 = vec![0u64; filled_clen*k];
-        let mut expected_found = vec![];
+        let mut expected_found: Vec<(usize, usize)> = vec![];
         let mut comb_start_pos = 0;
         // TESTING!!!
         //if k < 5
@@ -530,7 +530,7 @@ fn calc_min_sumn_to_fill_par_all(n: usize) {
                 //assert_eq!(filled, filled2);
                 
                 // TESTING!!!
-                if k >= 3 {
+                if k > 3 {
                     if comb[k-3]+1==comb[k-2] && comb[k-3]+2==comb[k-1] {
                         init_sum_fill_diff_change(n, comb, &mut comb_filled,
                                 &mut filled_l1, &mut filled_l1l2_sums, &mut filled_l2);
@@ -544,13 +544,13 @@ fn calc_min_sumn_to_fill_par_all(n: usize) {
                     if found_count.fetch_add(1, atomic::Ordering::SeqCst) < max_result {
                         writeln!(io::stdout().lock(), "Result {}: {} {:?}", n, k, comb).unwrap();
                     }
-                    if k >= 3 {
+                    if k > 3 {
                         expected_found.push((comb[k-2], comb[k-1]));
                     }
                 }
                 
                 // TESTING!!!
-                if k >= 3 {
+                if k > 3 {
                     if n-2==comb[k-2] && n-1==comb[k-1] {
                         let mut result_found = vec![];
                         //println!("TestEnd {:?}", comb);
@@ -630,8 +630,253 @@ fn calc_min_sumn_to_fill_par_all(n: usize) {
     }
 }
 
+fn calc_min_sumn_to_fill_par_all(n: usize) {
+    // find k_start
+    let ks = (1..64).find(|&x| {
+        let max_n = usize::try_from(combinations(x as u64, x+x-1 as u64)).unwrap();
+        //writeln!(io::stdout().lock(), "KSmax {}: {}", i, max_n);
+        max_n >= n
+    }).unwrap().try_into().unwrap();
+    
+    let nsq = u64::try_from((n*n)/10).unwrap();
+    let max_result = std::cmp::max(nsq, 100);
+    
+    for k in ks..64 {
+        let found_count = Arc::new(AtomicU64::new(0));
+        //if k < 5
+        {
+            let mut comb_iter = CombineIter::new(k, n);
+            let mut count = 0;
+            loop {
+                let comb = comb_iter.get();
+                if (count & ((1 << 20) - 1)) == 0 {
+                    writeln!(io::stderr().lock(), "Progress: {} {} {:?}", n, k, comb).unwrap();
+                }
+                if comb[0] != 0 || comb.get(1).copied().unwrap_or(1) != 1 {
+                    break;
+                }
+                
+                let mut filled = vec![false; n];
+                fill_sums(n, comb, &mut filled);
+                
+                if filled.into_iter().all(|x| x) {
+                    if found_count.fetch_add(1, atomic::Ordering::SeqCst) < max_result {
+                        writeln!(io::stdout().lock(), "Result {}: {} {:?}", n, k, comb).unwrap();
+                    }
+                }
+                
+                if !comb_iter.next() {
+                    break;
+                }
+                count += 1;
+            }
+        }
+//         else {
+//             // let mut count = 0;
+//             // loop {
+//             // }
+//             const PAR_LEVEL: usize = 4;
+//             writeln!(io::stderr().lock(), "Tasks: {} {}", n, k).unwrap();
+//             
+//             let time = Instant::now();
+//             
+//             CombineIterStd::new(PAR_LEVEL, n)
+//                 .take_while(|parent_comb| parent_comb[0] == 0 && parent_comb[1] == 1)
+//                 .par_bridge()
+//                 .for_each(|parent_comb| {
+//                     if time.elapsed().as_millis() % 1000 < 50 {
+//                         writeln!(io::stderr().lock(), "Task: {} {} {:?}", n, k,
+//                                  parent_comb).unwrap();
+//                     }
+//                     
+//                     let next_p = parent_comb[PAR_LEVEL - 1] + 1;
+//                     
+//                     if k - PAR_LEVEL > n - next_p {
+//                         return;
+//                     }
+//                     let mut comb_iter = CombineIter::new(k - PAR_LEVEL, n - next_p);
+//                     let mut count = 1;
+//                     loop {
+//                         let comb = parent_comb.iter().copied().chain(
+//                             comb_iter.get().iter().map(|x| *x + next_p))
+//                             .collect::<Vec<_>>();
+//                         if (count & ((1 << 18) - 1)) == 0 {
+//                             writeln!(io::stderr().lock(),
+//                                      "ParProgress: {} {} {:?}", n, k, comb).unwrap();
+//                         }
+//                         
+//                         let mut filled = vec![false; n];
+//                         fill_sums(n, &comb, &mut filled);
+//                         //assert_eq!(filled, filled2);
+//                         
+//                         if filled.into_iter().all(|x| x) {
+//                             if found_count.fetch_add(1, atomic::Ordering::SeqCst) < max_result {
+//                                 writeln!(io::stdout().lock(),
+//                                         "Result {}: {} {:?}", n, k, comb).unwrap();
+//                             }
+//                         }
+//                         
+//                         if !comb_iter.next() {
+//                             break;
+//                         }
+//                         count += 1;
+//                     }
+//                 });
+//         };
+        if found_count.load(atomic::Ordering::SeqCst) != 0 {
+            writeln!(io::stdout().lock(), "Total results {}: {} {}", n, k,
+                        found_count.load(atomic::Ordering::SeqCst)).unwrap();
+            break;
+        }
+    }
+}
+
+fn calc_min_sumn_to_fill_par_all_2(n: usize) {
+    // find k_start
+    let ks = (1..64).find(|&x| {
+        let max_n = usize::try_from(combinations(x as u64, x+x-1 as u64)).unwrap();
+        //writeln!(io::stdout().lock(), "KSmax {}: {}", i, max_n);
+        max_n >= n
+    }).unwrap().try_into().unwrap();
+    
+    let nsq = u64::try_from((n*n)/10).unwrap();
+    let max_result = std::cmp::max(nsq, 100);
+    
+    for k in ks..64 {
+        let found_count = Arc::new(AtomicU64::new(0));
+        if k < 4 {
+            let mut comb_iter = CombineIter::new(k, n);
+            let mut count = 0;
+            loop {
+                let comb = comb_iter.get();
+                if (count & ((1 << 20) - 1)) == 0 {
+                    writeln!(io::stderr().lock(), "Progress: {} {} {:?}", n, k, comb).unwrap();
+                }
+                if comb[0] != 0 || comb.get(1).copied().unwrap_or(1) != 1 {
+                    break;
+                }
+                
+                let mut filled = vec![false; n];
+                fill_sums(n, comb, &mut filled);
+                
+                if filled.into_iter().all(|x| x) {
+                    if found_count.fetch_add(1, atomic::Ordering::SeqCst) < max_result {
+                        writeln!(io::stdout().lock(), "Result {}: {} {:?}", n, k, comb).unwrap();
+                    }
+                }
+                
+                if !comb_iter.next() {
+                    break;
+                }
+                count += 1;
+            }
+        }
+        else {
+            let mut comb_iter = CombineIter::new(k - 2, n - 2);
+            let mut count = 0;
+            let mut final_comb = vec![0; k];
+            
+            let filled_clen = (n + 63) >> 6;
+            let mut comb_filled = vec![0u64; filled_clen];
+            let mut filled_l1 = vec![0u64; filled_clen*k];
+            let mut filled_l1l2_sums = vec![vec![]; k*k];
+            let mut filled_l2 = vec![0u64; filled_clen*k];
+            
+            loop {
+                let comb = comb_iter.get();
+                if (count & ((1 << 15) - 1)) == 0 {
+                    writeln!(io::stderr().lock(), "Progress: {} {} {:?}", n, k, comb).unwrap();
+                }
+                if comb[0] != 0 || comb.get(1).copied().unwrap_or(1) != 1 {
+                    break;
+                }
+                
+                final_comb[0..k-2].copy_from_slice(comb);
+                final_comb[k-2] = final_comb[k-3] + 1;
+                final_comb[k-1] = final_comb[k-3] + 2;
+                
+                init_sum_fill_diff_change(n, &final_comb, &mut comb_filled,
+                                &mut filled_l1, &mut filled_l1l2_sums, &mut filled_l2);
+                process_comb_l1l2(n, k, final_comb[k-2], &comb_filled,
+                &filled_l1, &filled_l1l2_sums, &filled_l2,
+                    |i,j| {
+                        final_comb[k-2] = i;
+                        final_comb[k-1] = j;
+                        if found_count.fetch_add(1, atomic::Ordering::SeqCst) < max_result {
+                            writeln!(io::stdout().lock(), "Result {}: {} {:?}", n, k, final_comb)
+                                .unwrap();
+                        }
+                    });
+                
+                if !comb_iter.next() {
+                    break;
+                }
+                count += 1;
+            }
+        }
+        
+//         else {
+//             // let mut count = 0;
+//             // loop {
+//             // }
+//             const PAR_LEVEL: usize = 4;
+//             writeln!(io::stderr().lock(), "Tasks: {} {}", n, k).unwrap();
+//             
+//             let time = Instant::now();
+//             
+//             CombineIterStd::new(PAR_LEVEL, n)
+//                 .take_while(|parent_comb| parent_comb[0] == 0 && parent_comb[1] == 1)
+//                 .par_bridge()
+//                 .for_each(|parent_comb| {
+//                     if time.elapsed().as_millis() % 1000 < 50 {
+//                         writeln!(io::stderr().lock(), "Task: {} {} {:?}", n, k,
+//                                  parent_comb).unwrap();
+//                     }
+//                     
+//                     let next_p = parent_comb[PAR_LEVEL - 1] + 1;
+//                     
+//                     if k - PAR_LEVEL > n - next_p {
+//                         return;
+//                     }
+//                     let mut comb_iter = CombineIter::new(k - PAR_LEVEL, n - next_p);
+//                     let mut count = 1;
+//                     loop {
+//                         let comb = parent_comb.iter().copied().chain(
+//                             comb_iter.get().iter().map(|x| *x + next_p))
+//                             .collect::<Vec<_>>();
+//                         if (count & ((1 << 18) - 1)) == 0 {
+//                             writeln!(io::stderr().lock(),
+//                                      "ParProgress: {} {} {:?}", n, k, comb).unwrap();
+//                         }
+//                         
+//                         let mut filled = vec![false; n];
+//                         fill_sums(n, &comb, &mut filled);
+//                         //assert_eq!(filled, filled2);
+//                         
+//                         if filled.into_iter().all(|x| x) {
+//                             if found_count.fetch_add(1, atomic::Ordering::SeqCst) < max_result {
+//                                 writeln!(io::stdout().lock(),
+//                                         "Result {}: {} {:?}", n, k, comb).unwrap();
+//                             }
+//                         }
+//                         
+//                         if !comb_iter.next() {
+//                             break;
+//                         }
+//                         count += 1;
+//                     }
+//                 });
+//         };
+        if found_count.load(atomic::Ordering::SeqCst) != 0 {
+            writeln!(io::stdout().lock(), "Total results {}: {} {}", n, k,
+                        found_count.load(atomic::Ordering::SeqCst)).unwrap();
+            break;
+        }
+    }
+}
+
 fn main() {
-    for i in 1..192 {
-        calc_min_sumn_to_fill_par_all(i);
+    for i in 1..100 {
+        calc_min_sumn_to_fill_par_all_2(i);
     }
 }
