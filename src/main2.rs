@@ -858,7 +858,7 @@ fn calc_min_sumn_to_fill_par_all_2(n: usize) {
                         final_comb[k-2] = final_comb[k-3] + 1;
                         final_comb[k-1] = final_comb[k-3] + 2;
                         
-                        if (count & ((1 << 17) - 1)) == 0 {
+                        if (count & ((1 << 12) - 1)) == 0 {
                             writeln!(io::stderr().lock(),
                                      "ParProgress: {} {} {:?}", n, k, final_comb).unwrap();
                         }
@@ -893,7 +893,7 @@ fn calc_min_sumn_to_fill_par_all_2(n: usize) {
 }
 
 fn main() {
-    for i in 1..300 {
+    for i in 300..1025 {
         calc_min_sumn_to_fill_par_all_2(i);
     }
 }
