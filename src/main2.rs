@@ -64,9 +64,9 @@ fn init_sum_fill_diff_change(n: usize, comb: &[usize], comb_filled: &mut [u64],
     }
 }
 
-fn shift_filled_lx(len: usize, k: usize, filled_l1: &mut [u64], fix_sh: usize, stride: usize) {
+fn shift_filled_lx(len: usize, k: usize, filled_l1: &mut [u64], fix_sh: usize) {
     for i in 0..k {
-        let filled = &mut filled_l1[len*stride*i..len*(stride*i+1)];
+        let filled = &mut filled_l1[len*i..len*(i+1)];
         let shift = i+1;
         let mut vprev = filled[len-1];
         for j in 0..len {
@@ -87,10 +87,10 @@ fn shift_filled_lx(len: usize, k: usize, filled_l1: &mut [u64], fix_sh: usize, s
 }
 
 fn apply_filled_lx(len: usize, k: usize, filled_l1: &[u64], comb_filled: &[u64],
-                    out_filled: &mut [u64], stride: usize) {
+                    out_filled: &mut [u64]) {
     out_filled.copy_from_slice(comb_filled);
     for i in 0..k {
-        let filled = &filled_l1[len*i*stride..len*(i*stride+1)];
+        let filled = &filled_l1[len*i..len*(i+1)];
         for j in 0..len {
             out_filled[j] |= filled[j];
         }
@@ -123,7 +123,7 @@ fn process_comb_l1l2(n: usize, k: usize, start: usize, comb_filled: &[u64],
     let mut l1_filled_l2_templ = Vec::from(filled_l2);
     let mut l2_filled_l2 = l1_filled_l2_templ.clone();
     for i in start..n-1 {
-        apply_filled_lx(filled_clen, k, &l1_filled_l1, &comb_filled, &mut l1_filled, 1);
+        apply_filled_lx(filled_clen, k, &l1_filled_l1, &comb_filled, &mut l1_filled);
         
         l2_filled_l2.copy_from_slice(&l1_filled_l2_templ);
         for j0 in 0..k {
@@ -137,14 +137,14 @@ fn process_comb_l1l2(n: usize, k: usize, start: usize, comb_filled: &[u64],
         
         // apply to comb_filled
         for j in i+1..n {
-            apply_filled_lx(filled_clen, k, &l2_filled_l2, &l1_filled, &mut l2_filled, 1);
+            apply_filled_lx(filled_clen, k, &l2_filled_l2, &l1_filled, &mut l2_filled);
             if check_all_filled(&l2_filled, fix_sh) {
                 found_call(i, j);
             }
-            shift_filled_lx(filled_clen, k, &mut l2_filled_l2, fix_sh, 1);
+            shift_filled_lx(filled_clen, k, &mut l2_filled_l2, fix_sh);
         }
         // shift l1
-        shift_filled_lx(filled_clen, k, &mut l1_filled_l1, fix_sh, 1);
+        shift_filled_lx(filled_clen, k, &mut l1_filled_l1, fix_sh);
         for j0 in 0..k {
             for j1 in 0..(k-j0) {
                 l1_filled_l1l2_sums[j0*k + j1].iter_mut().for_each(|sum| {
@@ -152,7 +152,7 @@ fn process_comb_l1l2(n: usize, k: usize, start: usize, comb_filled: &[u64],
                 });
             }
         }
-        shift_filled_lx(filled_clen, k, &mut l1_filled_l2_templ, fix_sh, 1);
+        shift_filled_lx(filled_clen, k, &mut l1_filled_l2_templ, fix_sh);
     }
 }
 
