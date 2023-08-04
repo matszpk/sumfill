@@ -798,7 +798,7 @@ fn calc_min_sumn_to_fill_par_all_2(n: usize) {
                 init_sum_fill_diff_change(n, &final_comb, &mut comb_filled,
                                 &mut filled_l1, &mut filled_l1l2_sums, &mut filled_l2);
                 process_comb_l1l2(n, k, final_comb[k-2], &comb_filled,
-                &filled_l1, &filled_l1l2_sums, &filled_l2,
+                    &filled_l1, &filled_l1l2_sums, &filled_l2,
                     |i,j| {
                         final_comb[k-2] = i;
                         final_comb[k-1] = j;
