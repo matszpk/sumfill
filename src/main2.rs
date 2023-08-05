@@ -124,7 +124,6 @@ fn process_comb_l1l2(n: usize, k: usize, start: usize, comb_filled: &[u64],
     let mut l2_filled_l2 = l1_filled_l2_templ.clone();
     for i in start..n-1 {
         apply_filled_lx(filled_clen, k, &l1_filled_l1, &comb_filled, &mut l1_filled);
-        
         l2_filled_l2.copy_from_slice(&l1_filled_l2_templ);
         for j0 in 0..k {
             for j1 in 0..(k-j0) {
@@ -134,7 +133,6 @@ fn process_comb_l1l2(n: usize, k: usize, start: usize, comb_filled: &[u64],
                 }
             }
         }
-        
         // apply to comb_filled
         for j in i+1..n {
             apply_filled_lx(filled_clen, k, &l2_filled_l2, &l1_filled, &mut l2_filled);
