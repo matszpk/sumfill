@@ -298,6 +298,7 @@ typedef struct _CombTask {
     uint filled_l1[FCLEN*CONST_K];
     uint filled_l1l2_sums[L1L2_TOTAL_SUMS];
     uint filled_l2[FCLEN*CONST_K];
+    uint l2_filled_l2[FCLEN*CONST_K];
     uint comb_k_m2;
     uint comb_k_m1;
     uint to_process;
@@ -318,6 +319,7 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
     for (i = 0; i < FCLEN*CONST_K; i++) {
         comb_task->filled_l1[i] = 0;
         comb_task->filled_l2[i] = 0;
+        comb_task->l2_filled_l2[i] = 0;
     }
     for (i = 0; i < L1L2_TOTAL_SUMS; i++)
         comb_task->filled_l1l2_sums[i] = 0;
@@ -394,11 +396,37 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
     }
 }
 
+#define L1_ITER_MAX (8)
+#define L2_ITER_MAX (16)
+
 kernel void process_comb_l1l2(uint task_num, global uint* free_list,
             global uint* free_list_num,
             global CombTask* comb_tasks,
             global uint* results,
             global ulong* result_count) {
+    const uint grid = get_group_id(0);
+    const uint lid = get_local_id(0);
+    const uint tid = (GROUP_LEN / FCLEN) * grid + lid / FCLEN;
+    if (tid >= task_num)
+        return;
+    
+    global CombTask* comb_task = comb_tasks + tid;
+    if (comb_task->to_process == 0)
+        return;
+    
+    local uint l1_filled[GROUP_LEN*FCLEN];
+    local uint l2_filled[GROUP_LEN*FCLEN];
+    local uint l1_filled_l1[GROUP_LEN*FCLEN*CONST_K];
+    local uint l1_filled_l2_templ[GROUP_LEN*FCLEN*CONST_K];
+    local uint l2_filled_l2[GROUP_LEN*FCLEN*CONST_K];
+    
+    uint it = 0;
+    uint iit = 0;
+    for (it = 0; it < L2_ITER_MAX; it++) {
+        for (iit = 0; iit < L2_ITER_MAX; iit++) {
+            
+        }
+    }
 }
 "#;
 
@@ -461,7 +489,7 @@ impl CLNWork {
             9 => 6435,
             _ => { panic!("Unsupported k"); }
         };
-        let comb_task_len = fclen + k*fclen*2 + l1l2_total_sums + 2 + 1;
+        let comb_task_len = fclen + k*fclen*3 + l1l2_total_sums + 2 + 1;
         let task_num = ((64 / fclen) * (group_num + fclen-1));
         
         let combs = unsafe {
