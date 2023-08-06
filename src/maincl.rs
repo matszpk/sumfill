@@ -452,7 +452,7 @@ impl CLNWork {
         let init_kernel = Kernel::create(&program, "init_sum_fill_diff_change")?;
         let process_kernel = Kernel::create(&program, "process_comb_l1l2")?;
         
-        let group_num = 1024;
+        let group_num = 10240;
         let l1l2_total_sums = match k {
             5 => 32,
             6 => 126,
@@ -675,7 +675,7 @@ fn main() {
     //     //calc_min_sumn_to_fill_par_all_opencl(i);
     // }
     {
-        let mut clnwork = CLNWork::new(0, 300, 7).unwrap();
+        let mut clnwork = CLNWork::new(0, 256, 7).unwrap();
         clnwork.test_init_kernel().unwrap();
     }
     // for k in 5..10 {
