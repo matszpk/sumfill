@@ -398,7 +398,7 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
             global uint* free_list_num,
             global CombTask* comb_tasks,
             global uint* results,
-            global uint* result_count) {
+            global ulong* result_count) {
 }
 "#;
 
