@@ -308,7 +308,7 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
         return;
     const uint cbidx = free_list[gid];
     const global uint* comb = combs + CONST_K*gid;
-    global CombTask* comb_task = &comb_tasks[gid];
+    global CombTask* comb_task = comb_tasks + gid;
     //
     uint i;
     for (i = 0; i < FCLEN; i++)
@@ -332,8 +332,6 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
     
     // main loop
     while (true) {
-    //uint ii;
-    //for (ii = 0; ii < 100; ii++) {
         // fill up comb task
         uint sum = 0;
         for (i = 0; i < CONST_K; i++)
@@ -568,13 +566,18 @@ impl CLNWork {
                 *exp_comb_task.last_mut().unwrap() = 1;
             }
             
-            let has_next = comb_iter.next();
+            let has_next = if count < 1 {
+                comb_iter.next()
+            } else {
+                false
+            };
             
             count += 1;
             if !has_next || count == self.task_num {
                 unsafe {
                     self.queue.enqueue_write_buffer(&mut self.combs, CL_BLOCKING,
                                 0, &cl_combs, &[])?;
+                    self.queue.finish()?;
                     let cl_task_num = count as cl_uint;
                     println!("NDrange: {} {}", count, self.task_num);
                     ExecuteKernel::new(&self.init_sum_fill_diff_change_kernel)
@@ -583,12 +586,8 @@ impl CLNWork {
                             .set_arg(&self.free_list)
                             .set_arg(&self.comb_tasks)
                             .set_local_work_size(64)
-                            .set_global_work_size((count + 63) >> 6)
+                            .set_global_work_size((((count + 63) >> 6)) << 6)
                             .enqueue_nd_range(&self.queue)?;
-                    // //
-                    //             uint task_num, global const uint* combs,
-                    // global const uint* free_list, global CombTask* comb_tasks
-                    // get results
                     self.queue.finish()?;
                     self.queue.enqueue_read_buffer(&mut self.comb_tasks, CL_BLOCKING,
                                 0, &mut cl_comb_tasks, &[])?;
@@ -600,6 +599,10 @@ impl CLNWork {
                         let res_comb_task = &mut cl_comb_tasks[
                                 self.comb_task_len*i..self.comb_task_len*(i+1)];
                         assert_eq!(exp_comb_task, res_comb_task, "comb_task {}", i);
+                        // if exp_comb_task != res_comb_task {
+                        //     println!("Not Equal {}: {:?}!={:?}", i, 
+                        //              exp_comb_task, res_comb_task);
+                        // }
                     }
                 }
                 self.queue.finish()?;
