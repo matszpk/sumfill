@@ -11,5 +11,10 @@ path = "src/main.rs"
 name = "sumfill2"
 path = "src/main2.rs"
 
+[[bin]]
+name = "sumfillcl"
+path = "src/maincl.rs"
+
 [dependencies]
 rayon = "1.6"
+"opencl3" = "0.9"
