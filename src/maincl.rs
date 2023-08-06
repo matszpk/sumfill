@@ -396,8 +396,171 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
     }
 }
 
-#define L1_ITER_MAX (8)
+#define L1_ITER_MAX (100)
 #define L2_ITER_MAX (16)
+
+#if CONST_K == 5
+#define APPLY_FILLED_LX(FL1, CF, OF) \
+{ \
+    (OF)[eid] = (CF)[eid] | \
+        (FL1)[FCLEN*0 + eid] | \
+        (FL1)[FCLEN*1 + eid] | \
+        (FL1)[FCLEN*2 + eid] | \
+        (FL1)[FCLEN*3 + eid] | \
+        (FL1)[FCLEN*4 + eid]; \
+}
+#endif
+
+#if CONST_K == 6
+#define APPLY_FILLED_LX(FL1, CF, OF) \
+{ \
+    (OF)[eid] = (CF)[eid] | \
+        (FL1)[FCLEN*0 + eid] | \
+        (FL1)[FCLEN*1 + eid] | \
+        (FL1)[FCLEN*2 + eid] | \
+        (FL1)[FCLEN*3 + eid] | \
+        (FL1)[FCLEN*4 + eid] | \
+        (FL1)[FCLEN*5 + eid]; \
+}
+#endif
+
+#if CONST_K == 7
+#define APPLY_FILLED_LX(FL1, CF, OF) \
+{ \
+    (OF)[eid] = (CF)[eid] | \
+        (FL1)[FCLEN*0 + eid] | \
+        (FL1)[FCLEN*1 + eid] | \
+        (FL1)[FCLEN*2 + eid] | \
+        (FL1)[FCLEN*3 + eid] | \
+        (FL1)[FCLEN*4 + eid] | \
+        (FL1)[FCLEN*5 + eid] | \
+        (FL1)[FCLEN*6 + eid]; \
+}
+#endif
+
+#if CONST_K == 8
+#define APPLY_FILLED_LX(FL1, CF, OF) \
+{ \
+    (OF)[eid] = (CF)[eid] | \
+        (FL1)[FCLEN*0 + eid] | \
+        (FL1)[FCLEN*1 + eid] | \
+        (FL1)[FCLEN*2 + eid] | \
+        (FL1)[FCLEN*3 + eid] | \
+        (FL1)[FCLEN*4 + eid] | \
+        (FL1)[FCLEN*5 + eid] | \
+        (FL1)[FCLEN*6 + eid] | \
+        (FL1)[FCLEN*7 + eid]; \
+}
+#endif
+
+#if CONST_K == 9
+#define APPLY_FILLED_LX(FL1, CF, OF) \
+{ \
+    (OF)[eid] = (CF)[eid] | \
+        (FL1)[FCLEN*0 + eid] | \
+        (FL1)[FCLEN*1 + eid] | \
+        (FL1)[FCLEN*2 + eid] | \
+        (FL1)[FCLEN*3 + eid] | \
+        (FL1)[FCLEN*4 + eid] | \
+        (FL1)[FCLEN*5 + eid] | \
+        (FL1)[FCLEN*6 + eid] | \
+        (FL1)[FCLEN*7 + eid] | \
+        (FL1)[FCLEN*8 + eid]; \
+}
+#endif
+
+#define SHIFT_FILLED_LX_5_NFX(FL1) \
+{ \
+    uint temp = ((FL1)[FCLEN*0 + eid] << 1) | ((FL1)[FCLEN*0 + neid] >> (32-1)); \
+    (FL1)[FCLEN*0 + eid] = temp; \
+    uint temp = ((FL1)[FCLEN*1 + eid] << 2) | ((FL1)[FCLEN*1 + neid] >> (32-2)); \
+    (FL1)[FCLEN*1 + eid] = temp; \
+    uint temp = ((FL1)[FCLEN*2 + eid] << 3) | ((FL1)[FCLEN*2 + neid] >> (32-3)); \
+    (FL1)[FCLEN*2 + eid] = temp; \
+    uint temp = ((FL1)[FCLEN*3 + eid] << 4) | ((FL1)[FCLEN*3 + neid] >> (32-4)); \
+    (FL1)[FCLEN*3 + eid] = temp; \
+    uint temp = ((FL1)[FCLEN*4 + eid] << 5) | ((FL1)[FCLEN*4 + neid] >> (32-5)); \
+    (FL1)[FCLEN*4 + eid] = temp; \
+}
+
+#define SHIFT_FILLED_LX_6_NFX(FL1) \
+{ \
+    SHIFT_FILLED_LX_5_NFX(FL1); \
+    uint temp = ((FL1)[FCLEN*5 + eid] << 6) | ((FL1)[FCLEN*5 + neid] >> (32-6)); \
+    (FL1)[FCLEN*5 + eid] = temp; \
+}
+
+#define SHIFT_FILLED_LX_7_NFX(FL1) \
+{ \
+    SHIFT_FILLED_LX_6_NFX(FL1); \
+    uint temp = ((FL1)[FCLEN*6 + eid] << 7) | ((FL1)[FCLEN*6 + neid] >> (32-7)); \
+    (FL1)[FCLEN*6 + eid] = temp; \
+}
+
+#define SHIFT_FILLED_LX_8_NFX(FL1) \
+{ \
+    SHIFT_FILLED_LX_7_NFX(FL1); \
+    uint temp = ((FL1)[FCLEN*7 + eid] << 8) | ((FL1)[FCLEN*7 + neid] >> (32-8)); \
+    (FL1)[FCLEN*7 + eid] = temp; \
+}
+
+#define SHIFT_FILLED_LX_9_NFX(FL1) \
+{ \
+    SHIFT_FILLED_LX_8_NFX(FL1); \
+    uint temp = ((FL1)[FCLEN*8 + eid] << 9) | ((FL1)[FCLEN*8 + neid] >> (32-9)); \
+    (FL1)[FCLEN*8 + eid] = temp; \
+}
+
+#define SHIFT_FILLED_LX_5_NFC(FL1) \
+{ \
+    uint temp = ((FL1)[FCLEN*0 + eid] << 1) | ((FL1)[FCLEN*0 + neid] >> (32-1)); \
+    temp = (temp & (super_mask|(~((1<<1)-1)))) | (temp << fix_sh_c); \
+    (FL1)[FCLEN*0 + eid] = temp; \
+    uint temp = ((FL1)[FCLEN*1 + eid] << 2) | ((FL1)[FCLEN*1 + neid] >> (32-2)); \
+    temp = (temp & (super_mask|(~((1<<2)-1)))) | (temp << fix_sh_c); \
+    (FL1)[FCLEN*1 + eid] = temp; \
+    uint temp = ((FL1)[FCLEN*2 + eid] << 3) | ((FL1)[FCLEN*2 + neid] >> (32-3)); \
+    temp = (temp & (super_mask|(~((1<<3)-1)))) | (temp << fix_sh_c); \
+    (FL1)[FCLEN*2 + eid] = temp; \
+    uint temp = ((FL1)[FCLEN*3 + eid] << 4) | ((FL1)[FCLEN*3 + neid] >> (32-4)); \
+    temp = (temp & (super_mask|(~((1<<4)-1)))) | (temp << fix_sh_c); \
+    (FL1)[FCLEN*3 + eid] = temp; \
+    uint temp = ((FL1)[FCLEN*4 + eid] << 5) | ((FL1)[FCLEN*4 + neid] >> (32-5)); \
+    temp = (temp & (super_mask|(~((1<<5)-1)))) | (temp << fix_sh_c); \
+    (FL1)[FCLEN*4 + eid] = temp; \
+}
+
+#define SHIFT_FILLED_LX_6_NFC(FL1) \
+{ \
+    SHIFT_FILLED_LX_5_NFC(FL1); \
+    uint temp = ((FL1)[FCLEN*5 + eid] << 6) | ((FL1)[FCLEN*5 + neid] >> (32-6)); \
+    temp = (temp & (super_mask|(~((1<<6)-1)))) | (temp << fix_sh_c); \
+    (FL1)[FCLEN*5 + eid] = temp; \
+}
+
+#define SHIFT_FILLED_LX_7_NFC(FL1) \
+{ \
+    SHIFT_FILLED_LX_6_NFC(FL1); \
+    uint temp = ((FL1)[FCLEN*6 + eid] << 7) | ((FL1)[FCLEN*6 + neid] >> (32-7)); \
+    temp = (temp & (super_mask|(~((1<<7)-1)))) | (temp << fix_sh_c); \
+    (FL1)[FCLEN*6 + eid] = temp; \
+}
+
+#define SHIFT_FILLED_LX_8_NFC(FL1) \
+{ \
+    SHIFT_FILLED_LX_7_NFC(FL1); \
+    uint temp = ((FL1)[FCLEN*7 + eid] << 8) | ((FL1)[FCLEN*7 + neid] >> (32-8)); \
+    temp = (temp & (super_mask|(~((1<<8)-1)))) | (temp << fix_sh_c); \
+    (FL1)[FCLEN*7 + eid] = temp; \
+}
+
+#define SHIFT_FILLED_LX_9_NFC(FL1) \
+{ \
+    SHIFT_FILLED_LX_8_NFC(FL1); \
+    uint temp = ((FL1)[FCLEN*8 + eid] << 9) | ((FL1)[FCLEN*8 + neid] >> (32-9)); \
+    temp = (temp & (super_mask|(~((1<<9)-1)))) | (temp << fix_sh_c); \
+    (FL1)[FCLEN*8 + eid] = temp; \
+}
 
 kernel void process_comb_l1l2(uint task_num, global uint* free_list,
             global uint* free_list_num,
@@ -406,25 +569,51 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
             global ulong* result_count) {
     const uint grid = get_group_id(0);
     const uint lid = get_local_id(0);
+    const uint GTASK_LEN = (GROUP_LEN / FCLEN);
     const uint tid = (GROUP_LEN / FCLEN) * grid + lid / FCLEN;
     if (tid >= task_num)
         return;
+    if (lid >= (GROUP_LEN / FCLEN) * FCLEN)
+        return;
+    const uint eid = lid - tid*FCLEN;
+    const uint neid = (eid + 1 < FCLEN) ? eid + 1 : 0;
+#if FIX_SH != 0
+    const uint fix_sh_c = (eid == 0) ? FIX_SH : 0;
+    const uint super_mask = (eid == 0) ? 0 : 0xffffffff;
+#endif
     
     global CombTask* comb_task = comb_tasks + tid;
     if (comb_task->to_process == 0)
         return;
     
-    local uint l1_filled[GROUP_LEN*FCLEN];
-    local uint l2_filled[GROUP_LEN*FCLEN];
-    local uint l1_filled_l1[GROUP_LEN*FCLEN*CONST_K];
-    local uint l1_filled_l2_templ[GROUP_LEN*FCLEN*CONST_K];
-    local uint l2_filled_l2[GROUP_LEN*FCLEN*CONST_K];
+    local uint l1_filled_group[GTASK_LEN*FCLEN];
+    local uint* l1_filled = l1_filled_group + tid*FCLEN;
+    local uint l2_filled_group[GTASK_LEN*FCLEN];
+    local uint* l2_filled = l2_filled_group + tid*FCLEN;
+    local uint l1_filled_l1_group[GTASK_LEN*FCLEN*CONST_K];
+    local uint* l1_filled_l1 = l1_filled_l1_group + tid*FCLEN*CONST_K;
+    local uint l1_filled_l2_templ_group[GTASK_LEN*FCLEN*CONST_K];
+    local uint* l1_filled_l2_templ = l1_filled_l2_templ_group + tid*FCLEN*CONST_K;
+    local uint l2_filled_l2_group[GTASK_LEN*FCLEN*CONST_K];
+    local uint* l2_filled_l2 = l2_filled_l2_group + tid*FCLEN*CONST_K;
+    
+    uint i;
+    
+    for (i = 0; i < CONST_K; i++) {
+        l1_filled_l1[FCLEN*i + eid] = comb_task->filled_l1[FCLEN*i + eid];
+        l1_filled_l2_templ[FCLEN*i + eid] = comb_task->filled_l2[FCLEN*i + eid];
+        l2_filled_l2[FCLEN*i + eid] = comb_task->l2_filled_l2[FCLEN*i + eid];
+    }
     
     uint it = 0;
     uint iit = 0;
     for (it = 0; it < L2_ITER_MAX; it++) {
+        if (comb_task->comb_k_m2+1 == comb_task->comb_k_m1) {
+            // apply shift
+        }
         for (iit = 0; iit < L2_ITER_MAX; iit++) {
-            
+            // apply filled
+            APPLY_FILLED_LX(l2_filled_l2, l1_filled, l2_filled);
         }
     }
 }
