@@ -405,6 +405,7 @@ pub struct CLNWork {
     init_sum_fill_diff_change_kernel: Kernel,
     process_comb_l1l2_kernel: Kernel,
     group_num: usize,
+    task_num: usize,
     comb_task_len: usize,
     combs: Buffer<cl_uint>,
     free_list: Buffer<cl_uint>,
@@ -452,21 +453,19 @@ impl CLNWork {
             _ => { panic!("Unsupported k"); }
         };
         let comb_task_len = k + k*fclen*2 + l1l2_total_sums + 1;
+        let task_num = (group_num + fclen-1) / fclen;
         
         let combs = unsafe {
             Buffer::<cl_uint>::create(&context, CL_MEM_READ_WRITE,
-                            k * ((group_num + fclen-1) / fclen),
-                            ptr::null_mut())?
+                            k * task_num, ptr::null_mut())?
         };
         let comb_tasks = unsafe {
             Buffer::<cl_uint>::create(&context, CL_MEM_READ_WRITE,
-                    comb_task_len * ((group_num + fclen-1) / fclen),
-                    ptr::null_mut())?
+                    comb_task_len * task_num, ptr::null_mut())?
         };
         let free_list = unsafe {
             Buffer::<cl_uint>::create(&context, CL_MEM_READ_WRITE,
-                            (group_num + fclen-1) / fclen,
-                            ptr::null_mut())?
+                            task_num, ptr::null_mut())?
         };
         let results = unsafe {
             Buffer::<cl_uint>::create(&context, CL_MEM_READ_WRITE,
@@ -490,6 +489,7 @@ impl CLNWork {
            process_comb_l1l2_kernel: process_kernel,
            group_num,
            comb_task_len,
+           task_num,
            combs,
            comb_tasks,
            free_list,
@@ -499,27 +499,30 @@ impl CLNWork {
         })
     }
     
-    fn test_init_kernel(&self) {
-        let total_task_num = usize::try_from(
-                    combinations((self.k - 4) as u64, (self.n - 4) as u64))
-                .unwrap();
+    fn test_init_kernel(&mut self) -> Result<()> {
         let filled_clen = (self.n + 31) >> 5;
         let mut count = 0;
-        let mut cl_combs: Vec<cl_uint> = vec![0; self.k*total_task_num];
-        let mut cl_comb_tasks: Vec<cl_uint> = vec![0; self.comb_task_len*total_task_num];
+        let mut exp_cl_comb_tasks: Vec<cl_uint> = vec![0; self.comb_task_len*self.task_num];
+        let mut cl_combs: Vec<cl_uint> = vec![0; self.k*self.task_num];
+        let mut cl_comb_tasks: Vec<cl_uint> = vec![0; self.comb_task_len*self.task_num];
+        let mut comb_task_data: Vec<(Vec<u32>, Vec<u32>, Vec<u32>)> = vec![
+                        (vec![], vec![], vec![]); self.task_num];
         
-        // prepare expected values
+        {
+            let free_list = (0..(self.task_num as cl_uint)).collect::<Vec<_>>();
+            unsafe {
+                self.queue.enqueue_write_buffer(&mut self.free_list, CL_BLOCKING,
+                        0, &free_list, &[])?;
+            }
+            self.queue.finish()?;
+        }
+        
         let mut comb_iter = CombineIter::new(self.k - 2, self.n - 2);
         let mut final_comb = vec![0; self.k];
         let mut comb_filled = vec![0u32; filled_clen];
         let mut filled_l1 = vec![0u32; filled_clen*self.k];
         let mut filled_l1l2_sums = vec![vec![]; self.k*self.k];
         let mut filled_l2 = vec![0u32; filled_clen*self.k];
-        
-        let cl_task_count = 0;
-        
-        let mut comb_task_data: Vec<(Vec<u32>, Vec<u32>, Vec<u32>)> = vec![
-                        (vec![], vec![], vec![]); total_task_num];
         
         // compare results
         loop {
@@ -536,15 +539,78 @@ impl CLNWork {
             init_sum_fill_diff_change_32(self.n, &final_comb, &mut comb_filled,
                             &mut filled_l1, &mut filled_l1l2_sums, &mut filled_l2);
             
-            if !comb_iter.next() {
+            {
+                // put comb to cl_combs
+                cl_combs[count*self.k..(count+1)*self.k].iter_mut().enumerate()
+                        .for_each(|(i,x)| *x = comb[i] as cl_uint);
+                // put to expected cl comb_task
+                let mut exp_comb_task = &mut exp_cl_comb_tasks[
+                        self.comb_task_len*count..self.comb_task_len*(count+1)];
+                // copy comb_filled
+                comb_filled.iter().enumerate().for_each(|(i, x)|
+                    exp_comb_task[i] = *x as cl_uint);
+                // copy filled_l1
+                filled_l1.iter().enumerate().for_each(|(i, x)|
+                    exp_comb_task[filled_clen + i] = *x as cl_uint);
+                // copy filled_l1l2_sum
+                let mut idx = filled_clen + filled_clen*self.k;
+                for j in 0..self.k*self.k {
+                    filled_l1l2_sums[j].iter().enumerate().for_each(|(i,x)|
+                        exp_comb_task[idx + i] = *x as cl_uint);
+                    idx += filled_l1l2_sums[j].len();
+                }
+                // copy filled_l2
+                filled_l2.iter().enumerate().for_each(|(i, x)|
+                    exp_comb_task[idx + i] = *x as cl_uint);
+                *exp_comb_task.last_mut().unwrap() = 1;
+            }
+            
+            let has_next = comb_iter.next();
+            
+            count += 1;
+            if !has_next || count == self.task_num {
+                unsafe {
+                    self.queue.enqueue_write_buffer(&mut self.combs, CL_BLOCKING,
+                                0, &cl_combs, &[])?;
+                    let cl_task_num = count as cl_uint;
+                    ExecuteKernel::new(&self.init_sum_fill_diff_change_kernel)
+                            .set_arg(&cl_task_num)
+                            .set_arg(&self.combs)
+                            .set_arg(&self.free_list)
+                            .set_arg(&self.comb_tasks)
+                            .set_global_work_size(count)
+                            .enqueue_nd_range(&self.queue)?;
+                    // //
+                    //             uint task_num, global const uint* combs,
+                    // global const uint* free_list, global CombTask* comb_tasks
+                    // get results
+                    self.queue.finish()?;
+                    self.queue.enqueue_read_buffer(&mut self.combs, CL_BLOCKING,
+                                0, &mut cl_comb_tasks, &[])?;
+                    self.queue.finish()?;
+                    // compare results
+                    for i in 0..count {
+                        let exp_comb_task = &mut exp_cl_comb_tasks[
+                                self.comb_task_len*i..self.comb_task_len*(i+1)];
+                        let res_comb_task = &mut cl_comb_tasks[
+                                self.comb_task_len*i..self.comb_task_len*(i+1)];
+                        assert_eq!(exp_comb_task, res_comb_task, "comb_task {}", i);
+                    }
+                }
+                self.queue.finish()?;
+                // call init_kernel
+                count = 0;
+            }
+            
+            if !has_next {
                 break;
             }
-            count += 1;
         }
         //
         
         // call kernel
         // end of OpenCL stuff
+        Ok(())
     }
 }
 
