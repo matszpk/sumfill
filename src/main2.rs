@@ -1,5 +1,6 @@
 use std::io::{self, Write};
 use std::sync::{atomic::{self, AtomicU64}, Arc};
+use std::env;
 use std::time::Instant;
 use rayon::prelude::*;
 mod utils;
@@ -895,7 +896,12 @@ fn calc_min_sumn_to_fill_par_all_2(n: usize) {
 }
 
 fn main() {
-    for i in 300..1025 {
+    let mut args = env::args().skip(1);
+    let n_start = args.next().expect("Required n_start argument")
+        .parse().expect("Required n_start argument");
+    let n_end = args.next().expect("Required n_end argument")
+        .parse().expect("Required n_end argument");
+    for i in n_start..n_end {
         calc_min_sumn_to_fill_par_all_2(i);
     }
 }
