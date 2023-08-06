@@ -738,8 +738,9 @@ fn calc_min_sumn_to_fill_par_all_2(n: usize) {
         max_n >= n
     }).unwrap().try_into().unwrap();
     
-    let nsq = u64::try_from((n*n)/10).unwrap();
-    let max_result = std::cmp::max(nsq, 100);
+    //let nsq = u64::try_from((n*n)/10).unwrap();
+    //let max_result = std::cmp::max(nsq, 100);
+    let max_result = 10000;
     
     for k in ks..64 {
         let found_count = Arc::new(AtomicU64::new(0));
