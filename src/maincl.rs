@@ -325,12 +325,14 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
     comb_task->comb_k_m1 = comb[CONST_K-3] + 2;
     comb_task->to_process = 1;
     // initialize iterator
-    uint numcomb[CONST_K];
+    const uint lid = get_local_id(0);
+    local uint numcomb_group[GROUP_LEN*CONST_K];
+    local uint* numcomb = numcomb_group + CONST_K*lid;
     for (i = 0; i < CONST_K; i++)
         numcomb[i] = 0;
     
     local uint l1l2idx_idx_group[GROUP_LEN*CONST_K*CONST_K];
-    local uint* l1l2idx_idx = l1l2idx_idx_group + CONST_K*CONST_K*(get_local_id(0));
+    local uint* l1l2idx_idx = l1l2idx_idx_group + CONST_K*CONST_K*lid;
     for (i = 0; i < CONST_K*CONST_K; i++)
         l1l2idx_idx[i] = 0;
     // main loop
