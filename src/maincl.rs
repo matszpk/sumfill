@@ -308,18 +308,18 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
         return;
     const uint cbidx = free_list[gid];
     const global uint* comb = combs + CONST_K*gid;
-    global CombTask* comb_task = comb_tasks + gid;
+    global CombTask* comb_task = comb_tasks + cbidx;
     //
     uint i;
     for (i = 0; i < FCLEN; i++)
-        comb_tasks->comb_filled[i] = 0;
+        comb_task->comb_filled[i] = 0;
     for (i = 0; i < FCLEN*CONST_K; i++) {
         comb_task->filled_l1[i] = 0;
         comb_task->filled_l2[i] = 0;
     }
     for (i = 0; i < L1L2_TOTAL_SUMS; i++)
-        comb_tasks->filled_l1l2_sums[i] = 0;
-    comb_tasks->to_process = 1;
+        comb_task->filled_l1l2_sums[i] = 0;
+    comb_task->to_process = 1;
     // initialize iterator
     uint numcomb[CONST_K];
     for (i = 0; i < CONST_K; i++)
@@ -329,7 +329,6 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
     local uint* l1l2idx_idx = l1l2idx_idx_group + CONST_K*CONST_K*(get_local_id(0));
     for (i = 0; i < CONST_K*CONST_K; i++)
         l1l2idx_idx[i] = 0;
-    
     // main loop
     while (true) {
         // fill up comb task
@@ -350,19 +349,19 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
         const uint fixsum = sum + FIX_SH;
         
         if ((l1count == 0) && (l2count == 0)) {
-            comb_tasks->comb_filled[fixsum >> 5] |= 1 << (fixsum & 31);
+            comb_task->comb_filled[fixsum >> 5] |= 1 << (fixsum & 31);
         } else {
             if (l1count != 0) {
                 if (l2count == 0)
-                    comb_tasks->filled_l1[FCLEN*(l1count-1) + (fixsum>>5)] |= 1<<(fixsum & 31);
+                    comb_task->filled_l1[FCLEN*(l1count-1) + (fixsum>>5)] |= 1<<(fixsum & 31);
                 else {
                     const uint vec_id = CONST_K*(l1count-1) + (l2count-1);
-                    comb_tasks->filled_l1l2_sums[
+                    comb_task->filled_l1l2_sums[
                         l1l2_sum_pos[vec_id] + l1l2idx_idx[vec_id]]  = sum;
                     l1l2idx_idx[vec_id] += 1;
                 }
             } else if (l2count != 0) {
-                comb_tasks->filled_l2[FCLEN*(l2count-1) + (fixsum>>5)] |= 1<<(fixsum & 31);
+                comb_task->filled_l2[FCLEN*(l2count-1) + (fixsum>>5)] |= 1<<(fixsum & 31);
             }
         }
         
@@ -454,7 +453,7 @@ impl CLNWork {
             _ => { panic!("Unsupported k"); }
         };
         let comb_task_len = fclen + k*fclen*2 + l1l2_total_sums + 1;
-        let task_num = (group_num + fclen-1) / fclen;
+        let task_num = (64 * (group_num + fclen-1)) / fclen;
         
         let combs = unsafe {
             Buffer::<cl_uint>::create(&context, CL_MEM_READ_WRITE,
@@ -566,11 +565,7 @@ impl CLNWork {
                 *exp_comb_task.last_mut().unwrap() = 1;
             }
             
-            let has_next = if count < 1 {
-                comb_iter.next()
-            } else {
-                false
-            };
+            let has_next = comb_iter.next();
             
             count += 1;
             if !has_next || count == self.task_num {
@@ -608,6 +603,7 @@ impl CLNWork {
                 self.queue.finish()?;
                 // call init_kernel
                 count = 0;
+                println!("CCX");
             }
             
             if !has_next {
