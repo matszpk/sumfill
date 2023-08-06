@@ -357,7 +357,7 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
                 else {
                     const uint vec_id = CONST_K*(l1count-1) + (l2count-1);
                     comb_task->filled_l1l2_sums[
-                        l1l2_sum_pos[vec_id] + l1l2idx_idx[vec_id]]  = sum;
+                        l1l2_sum_pos[vec_id] + l1l2idx_idx[vec_id]] = sum;
                     l1l2idx_idx[vec_id] += 1;
                 }
             } else if (l2count != 0) {
@@ -453,7 +453,7 @@ impl CLNWork {
             _ => { panic!("Unsupported k"); }
         };
         let comb_task_len = fclen + k*fclen*2 + l1l2_total_sums + 1;
-        let task_num = (64 * (group_num + fclen-1)) / fclen;
+        let task_num = ((64 / fclen) * (group_num + fclen-1));
         
         let combs = unsafe {
             Buffer::<cl_uint>::create(&context, CL_MEM_READ_WRITE,
@@ -565,7 +565,11 @@ impl CLNWork {
                 *exp_comb_task.last_mut().unwrap() = 1;
             }
             
-            let has_next = comb_iter.next();
+            let has_next = if count < 37 {
+                comb_iter.next()
+            } else {
+                false
+            };
             
             count += 1;
             if !has_next || count == self.task_num {
