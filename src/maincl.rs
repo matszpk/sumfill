@@ -1682,7 +1682,7 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
     comb_filled[eid] = comb_task->comb_filled[eid];
     uint it = 0;
     uint iit = 0;
-    for (it = 0; it < L2_ITER_MAX; it++) {
+    for (it = 0; it < L1_ITER_MAX; it++) {
         if (comb_k_l2 == CONST_N)
             break;
         if (comb_k_l1+1 == comb_k_l2) {
