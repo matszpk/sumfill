@@ -649,12 +649,98 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
 #endif
 
 #if FCLEN == 1
-#define FILLED_EQUAL(OF,REPORT) \
+#define FILLED_EQUAL_NFX(OF,REPORT) \
 { \
-    if (((OF)[0] == UINT32_MAX)) { \
+    if (((OF)[0] == UINT_MAX)) { \
+        REPORT; \
+    } \
+}
+#endif
+
+#if FCLEN == 2
+#define FILLED_EQUAL_NFX(OF,REPORT) \
+{ \
+    if (eid == 0) \
+        (OF)[0] &= (OF)[1]; \
+    if (eid == 0 && ((OF)[0] == UINT_MAX)) { \
+        REPORT; \
+    } \
+}
+#endif
+
+#if FCLEN > 2 && FCLEN <= 4
+#define FILLED_EQUAL_NFX(OF,REPORT) \
+{ \
+    if (eid+2 < FCLEN) \
+        (OF)[eid+0] &= (OF)[eid+2]; \
+    if (eid == 0) \
+        (OF)[eid+0] &= (OF)[eid+1]; \
+    if (eid==0 && ((OF)[0] == UINT_MAX)) { \
+        REPORT; \
+    } \
+}
+#endif
+
+#if FCLEN > 4 && FCLEN <= 8
+#define FILLED_EQUAL_NFX(OF,REPORT) \
+{ \
+    if (eid+4 < FCLEN) \
+        (OF)[eid+0] &= (OF)[eid+4]; \
+    if (eid+2 < FCLEN) \
+        (OF)[eid+0] &= (OF)[eid+2]; \
+    if (eid == 0) \
+        (OF)[eid+0] &= (OF)[eid+1]; \
+    if (eid==0 && ((OF)[0] == UINT_MAX)) { \
+        REPORT; \
+    } \
+}
+#endif
+
+#if FCLEN > 8 && FCLEN <= 16
+#define FILLED_EQUAL_NFX(OF,REPORT) \
+{ \
+    if (eid+8 < FCLEN) \
+        (OF)[eid+0] &= (OF)[eid+8]; \
+    if (eid+4 < FCLEN) \
+        (OF)[eid+0] &= (OF)[eid+4]; \
+    if (eid+2 < FCLEN) \
+        (OF)[eid+0] &= (OF)[eid+2]; \
+    if (eid == 0) \
+        (OF)[eid+0] &= (OF)[eid+1]; \
+    if (eid==0 && ((OF)[0] == UINT_MAX)) { \
+        REPORT; \
+    } \
+}
+#endif
+
+#if FCLEN > 16 && FCLEN <= 32
+#define FILLED_EQUAL_NFX(OF,REPORT) \
+{ \
+    if (eid+16 < FCLEN) \
+        (OF)[eid+0] &= (OF)[eid+16]; \
+    if (eid+8 < FCLEN) \
+        (OF)[eid+0] &= (OF)[eid+8]; \
+    if (eid+4 < FCLEN) \
+        (OF)[eid+0] &= (OF)[eid+4]; \
+    if (eid+2 < FCLEN) \
+        (OF)[eid+0] &= (OF)[eid+2]; \
+    if (eid == 0) \
+        (OF)[eid+0] &= (OF)[eid+1]; \
+    if (eid==0 && ((OF)[0] == UINT_MAX)) { \
         REPORT; \
     }
 }
+#endif
+
+#if FIX_SH != 0
+#define FILLED_EQUAL(OF,REPORT) \
+{ \
+    if (eid == 0) \
+        (OF)[0] |= ((1<<FIX_SH)-1); \
+    FILLED_EQUAL_NFX(OF,REPORT); \
+}
+#else
+#define FILLED_EQUAL(OF,REPORT) FILLED_EQUAL_NFX(OF,REPORT)
 #endif
 
 kernel void process_comb_l1l2(uint task_num, global uint* free_list,
@@ -672,7 +758,7 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
         return;
     const uint eid = lid - tid*FCLEN;
     const uint neid = (eid + 1 < FCLEN) ? eid + 1 : 0;
-    
+        
     global CombTask* comb_task = comb_tasks + tid;
     if (comb_task->comb_k_m1 == CONST_N)
         return;
@@ -706,6 +792,7 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
             // apply filled
             APPLY_FILLED_LX(l2_filled_l2, l1_filled, l2_filled);
             SHIFT_FILLED_LX(l2_filled_l2);
+            FILLED_EQUAL(l2_filled_l2,{});
         }
     }
 }
