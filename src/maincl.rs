@@ -301,7 +301,6 @@ typedef struct _CombTask {
     uint l2_filled_l2[FCLEN*CONST_K];
     uint comb_k_m2;
     uint comb_k_m1;
-    uint to_process;
 } CombTask;
 
 kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
@@ -325,7 +324,6 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
         comb_task->filled_l1l2_sums[i] = 0;
     comb_task->comb_k_m2 = comb[CONST_K-3] + 1;
     comb_task->comb_k_m1 = comb[CONST_K-3] + 2;
-    comb_task->to_process = 1;
     // initialize iterator
     const uint lid = get_local_id(0);
     local uint numcomb_group[GROUP_LEN*CONST_K];
@@ -676,7 +674,7 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
     const uint neid = (eid + 1 < FCLEN) ? eid + 1 : 0;
     
     global CombTask* comb_task = comb_tasks + tid;
-    if (comb_task->to_process == 0)
+    if (comb_task->comb_k_m1 == CONST_N)
         return;
     
     local uint l1_filled_group[GTASK_LEN*FCLEN];
@@ -772,7 +770,7 @@ impl CLNWork {
             9 => 6435,
             _ => { panic!("Unsupported k"); }
         };
-        let comb_task_len = fclen + k*fclen*3 + l1l2_total_sums + 2 + 1;
+        let comb_task_len = fclen + k*fclen*3 + l1l2_total_sums + 2;
         let task_num = ((64 / fclen) * (group_num + fclen-1));
         
         let combs = unsafe {
@@ -882,9 +880,8 @@ impl CLNWork {
                 // copy filled_l2
                 filled_l2.iter().enumerate().for_each(|(i, x)|
                     exp_comb_task[idx + i] = *x as cl_uint);
-                exp_comb_task[exp_comb_task.len() - 3] = final_comb[self.k-2] as cl_uint;
-                exp_comb_task[exp_comb_task.len() - 2] = final_comb[self.k-1] as cl_uint;
-                *exp_comb_task.last_mut().unwrap() = 1;
+                exp_comb_task[exp_comb_task.len() - 2] = final_comb[self.k-2] as cl_uint;
+                exp_comb_task[exp_comb_task.len() - 1] = final_comb[self.k-1] as cl_uint;
             }
             
             let has_next = comb_iter.next();
