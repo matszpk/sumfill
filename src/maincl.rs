@@ -650,6 +650,14 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
 
 #endif
 
+#if FCLEN == 1
+#define FILLED_EQUAL(OF,REPORT) \
+{ \
+    if (((OF)[0] == UINT32_MAX)) { \
+        REPORT; \
+    }
+}
+#endif
 
 kernel void process_comb_l1l2(uint task_num, global uint* free_list,
             global uint* free_list_num,
@@ -666,10 +674,6 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
         return;
     const uint eid = lid - tid*FCLEN;
     const uint neid = (eid + 1 < FCLEN) ? eid + 1 : 0;
-/*#if FIX_SH != 0
-    const uint fix_sh_c = (eid == 0) ? FIX_SH : 0;
-    const uint super_mask = (eid == 0) ? 0 : 0xffffffff;
-#endif*/
     
     global CombTask* comb_task = comb_tasks + tid;
     if (comb_task->to_process == 0)
