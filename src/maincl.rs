@@ -172,6 +172,63 @@ fn modulo_add(a: usize, b: usize, n: usize) -> usize {
     }
 }
 
+// for 32-bit only testing
+
+fn init_sum_fill_diff_change_32(n: usize, comb: &[usize], comb_filled: &mut [u32],
+            filled_l1: &mut [u32], filled_l1l2_sums: &mut [Vec<usize>], filled_l2: &mut [u32]) {
+    let k = comb.len();
+    comb_filled.fill(0);
+    filled_l1.fill(0);
+    filled_l2.fill(0);
+    filled_l1l2_sums.iter_mut().for_each(|sums| sums.clear());
+    let filled_clen = comb_filled.len();
+    let mut numr_iter = CombineWithRepIter::new(k, k);
+    let fix_sh =  if (n & 31) != 0 {
+        (u32::BITS - ((n as u32) & 31)) as usize
+    } else {
+        0
+    };
+    loop {
+        let numc = numr_iter.get();
+        //let sum = numc.iter().map(|x| comb[*x]).sum::<usize>() % n;
+        let sum = numc.iter().map(|x| comb[*x]).fold(0, |a, x| {
+            let a = a + x;
+            if a >= n {
+                a - n
+            } else {
+                a
+            }
+        });
+        
+        let fixsum = fix_sh + sum;
+        let mut l1count = 0;
+        let mut l2count = 0;
+        for c in numc {
+            if *c == k - 2 {
+                l1count += 1;
+            } else if *c == k - 1 {
+                l2count += 1;
+            }
+        }
+        if l1count == 0 && l2count == 0 {
+            comb_filled[fixsum >> 5] |= 1u32 << (fixsum & 31);
+        } else {
+            if l1count != 0 {
+                if l2count == 0 {
+                    filled_l1[filled_clen*(l1count-1) + (fixsum >> 5)] |= 1u32 << (fixsum & 31);
+                } else {
+                    filled_l1l2_sums[k*(l1count-1) + (l2count-1)].push(sum);
+                }
+            } else if l2count != 0 {
+                filled_l2[filled_clen*(l2count-1) + (fixsum >> 5)] |= 1u32 << (fixsum & 31);
+            }
+        }
+        if !numr_iter.next() {
+            break;
+        }
+    }
+}
+
 // CPU routines - end
 
 const PROGRAM_SOURCE: &str = r#"
@@ -237,10 +294,10 @@ constant uint l1l2_sum_pos[81] = {
 #endif
 
 typedef struct _CombTask {
-    uint comb_filled[CONST_K];
-    uint filled_l1[FCLEN];
+    uint comb_filled[FCLEN];
+    uint filled_l1[FCLEN*CONST_K];
     uint filled_l1l2_sums[L1L2_TOTAL_SUMS];
-    uint filled_l2[FCLEN];
+    uint filled_l2[FCLEN*CONST_K];
     uint to_process;
 } CombTask;
 
@@ -254,9 +311,9 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
     global CombTask* comb_task = comb_tasks + cbidx;
     //
     uint i;
-    for (i = 0; i < CONST_K; i++)
+    for (i = 0; i < FCLEN; i++)
         comb_tasks->comb_filled[i] = 0;
-    for (i = 0; i < FCLEN; i++) {
+    for (i = 0; i < FCLEN*CONST_K; i++) {
         comb_task->comb_filled[i] = 0;
         comb_task->filled_l2[i] = 0;
     }
@@ -339,6 +396,8 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
 /// OpenCL stuff
 
 pub struct CLNWork {
+    n: usize,
+    k: usize,
     device: Device,
     context: Context,
     queue: CommandQueue,
@@ -346,6 +405,7 @@ pub struct CLNWork {
     init_sum_fill_diff_change_kernel: Kernel,
     process_comb_l1l2_kernel: Kernel,
     group_num: usize,
+    comb_task_len: usize,
     combs: Buffer<cl_uint>,
     free_list: Buffer<cl_uint>,
     free_list_num: Buffer<cl_uint>,
@@ -391,15 +451,16 @@ impl CLNWork {
             9 => 6435,
             _ => { panic!("Unsupported k"); }
         };
+        let comb_task_len = k + k*fclen*2 + l1l2_total_sums + 1;
         
         let combs = unsafe {
             Buffer::<cl_uint>::create(&context, CL_MEM_READ_WRITE,
-                            k*((group_num + fclen-1) / fclen),
+                            k * ((group_num + fclen-1) / fclen),
                             ptr::null_mut())?
         };
         let comb_tasks = unsafe {
             Buffer::<cl_uint>::create(&context, CL_MEM_READ_WRITE,
-                    (k + fclen*2 + l1l2_total_sums + 1)*((group_num + fclen-1) / fclen),
+                    comb_task_len * ((group_num + fclen-1) / fclen),
                     ptr::null_mut())?
         };
         let free_list = unsafe {
@@ -409,7 +470,7 @@ impl CLNWork {
         };
         let results = unsafe {
             Buffer::<cl_uint>::create(&context, CL_MEM_READ_WRITE,
-                            3*(10000), ptr::null_mut())?
+                            3 * 10000, ptr::null_mut())?
         };
         let free_list_num = unsafe {
             Buffer::<cl_uint>::create(&context, CL_MEM_READ_WRITE, 1, ptr::null_mut())?
@@ -419,6 +480,8 @@ impl CLNWork {
         };
         
         Ok(Self {
+           n,
+           k,
            device,
            context,
            queue,
@@ -426,6 +489,7 @@ impl CLNWork {
            init_sum_fill_diff_change_kernel: init_kernel,
            process_comb_l1l2_kernel: process_kernel,
            group_num,
+           comb_task_len,
            combs,
            comb_tasks,
            free_list,
@@ -433,6 +497,54 @@ impl CLNWork {
            results,
            result_count
         })
+    }
+    
+    fn test_init_kernel(&self) {
+        let total_task_num = usize::try_from(
+                    combinations((self.k - 4) as u64, (self.n - 4) as u64))
+                .unwrap();
+        let filled_clen = (self.n + 31) >> 5;
+        let mut count = 0;
+        let mut cl_combs: Vec<cl_uint> = vec![0; self.k*total_task_num];
+        let mut cl_comb_tasks: Vec<cl_uint> = vec![0; self.comb_task_len*total_task_num];
+        
+        // prepare expected values
+        let mut comb_iter = CombineIter::new(self.k - 2, self.n - 2);
+        let mut final_comb = vec![0; self.k];
+        let mut comb_filled = vec![0u32; filled_clen];
+        let mut filled_l1 = vec![0u32; filled_clen*self.k];
+        let mut filled_l1l2_sums = vec![vec![]; self.k*self.k];
+        let mut filled_l2 = vec![0u32; filled_clen*self.k];
+        
+        let cl_task_count = 0;
+        
+        let mut comb_task_data: Vec<(Vec<u32>, Vec<u32>, Vec<u32>)> = vec![
+                        (vec![], vec![], vec![]); total_task_num];
+        
+        // compare results
+        loop {
+            let comb = comb_iter.get();
+            
+            if comb[0] != 0 || comb.get(1).copied().unwrap_or(1) != 1 {
+                break;
+            }
+            
+            final_comb[0..self.k-2].copy_from_slice(comb);
+            final_comb[self.k-2] = final_comb[self.k-3] + 1;
+            final_comb[self.k-1] = final_comb[self.k-3] + 2;
+            
+            init_sum_fill_diff_change_32(self.n, &final_comb, &mut comb_filled,
+                            &mut filled_l1, &mut filled_l1l2_sums, &mut filled_l2);
+            
+            if !comb_iter.next() {
+                break;
+            }
+            count += 1;
+        }
+        //
+        
+        // call kernel
+        // end of OpenCL stuff
     }
 }
 
