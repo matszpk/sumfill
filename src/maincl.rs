@@ -314,7 +314,7 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
     for (i = 0; i < FCLEN; i++)
         comb_tasks->comb_filled[i] = 0;
     for (i = 0; i < FCLEN*CONST_K; i++) {
-        comb_task->comb_filled[i] = 0;
+        comb_task->filled_l1[i] = 0;
         comb_task->filled_l2[i] = 0;
     }
     for (i = 0; i < L1L2_TOTAL_SUMS; i++)
@@ -452,7 +452,7 @@ impl CLNWork {
             9 => 6435,
             _ => { panic!("Unsupported k"); }
         };
-        let comb_task_len = k + k*fclen*2 + l1l2_total_sums + 1;
+        let comb_task_len = fclen + k*fclen*2 + l1l2_total_sums + 1;
         let task_num = (group_num + fclen-1) / fclen;
         
         let combs = unsafe {
@@ -542,7 +542,7 @@ impl CLNWork {
             {
                 // put comb to cl_combs
                 cl_combs[count*self.k..(count+1)*self.k].iter_mut().enumerate()
-                        .for_each(|(i,x)| *x = comb[i] as cl_uint);
+                        .for_each(|(i,x)| *x = final_comb[i] as cl_uint);
                 // put to expected cl comb_task
                 let mut exp_comb_task = &mut exp_cl_comb_tasks[
                         self.comb_task_len*count..self.comb_task_len*(count+1)];
@@ -585,7 +585,7 @@ impl CLNWork {
                     // global const uint* free_list, global CombTask* comb_tasks
                     // get results
                     self.queue.finish()?;
-                    self.queue.enqueue_read_buffer(&mut self.combs, CL_BLOCKING,
+                    self.queue.enqueue_read_buffer(&mut self.comb_tasks, CL_BLOCKING,
                                 0, &mut cl_comb_tasks, &[])?;
                     self.queue.finish()?;
                     // compare results
@@ -660,7 +660,8 @@ fn main() {
     //     //calc_min_sumn_to_fill_par_all_opencl(i);
     // }
     {
-        let clnwork = CLNWork::new(0, 400, 7);
+        let mut clnwork = CLNWork::new(0, 300, 7).unwrap();
+        clnwork.test_init_kernel().unwrap();
     }
     // for k in 5..10 {
     //     let mut l1l2_sum_numbers = vec![0; k*k];
