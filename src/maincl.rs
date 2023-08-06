@@ -1698,12 +1698,6 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
                 }
             }
         }
-        for (iit = 0; iit < L2_ITER_MAX; iit++) {
-            // apply filled
-            if (comb_k_l2 < CONST_N) {
-                APPLY_FILLED_LX(l2_filled_l2, l1_filled, l2_filled);
-                SHIFT_FILLED_LX(l2_filled_l2);
-                
 #define MAX_RESULT (10000)
 #define REPORT_SOL \
 { \
@@ -1714,7 +1708,11 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
         results[old*3 + 2] = comb_k_l2; \
     } \
 }
-                
+        for (iit = 0; iit < L2_ITER_MAX; iit++) {
+            // apply filled
+            if (comb_k_l2 < CONST_N) {
+                APPLY_FILLED_LX(l2_filled_l2, l1_filled, l2_filled);
+                SHIFT_FILLED_LX(l2_filled_l2);
                 FILLED_EQUAL(l2_filled_l2,REPORT_SOL);
                 comb_k_l2++;
             }
