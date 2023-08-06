@@ -308,7 +308,7 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
         return;
     const uint cbidx = free_list[gid];
     const global uint* comb = combs + CONST_K*gid;
-    global CombTask* comb_task = comb_tasks + cbidx;
+    global CombTask* comb_task = &comb_tasks[gid];
     //
     uint i;
     for (i = 0; i < FCLEN; i++)
@@ -363,8 +363,9 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
                         l1l2_sum_pos[vec_id] + l1l2idx_idx[vec_id]]  = sum;
                     l1l2idx_idx[vec_id] += 1;
                 }
-            } else if (l2count != 0)
+            } else if (l2count != 0) {
                 comb_tasks->filled_l2[FCLEN*(l2count-1) + (fixsum>>5)] |= 1<<(fixsum & 31);
+            }
         }
         
         // next iteration of numc (combinations with replacements) (k,k)
