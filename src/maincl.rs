@@ -1743,6 +1743,10 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
         comb_task->filled_l2[FCLEN*i + eid] = l1_filled_l2_templ[FCLEN*i + eid];
         comb_task->l2_filled_l2[FCLEN*i + eid] = l2_filled_l2[FCLEN*i + eid];
     }
+    if (eid == 0 && comb_k_l2 == CONST_N) {
+        const uint fidx = atomic_inc(free_list_num);
+        free_list[fidx] = tid;
+    }
 }
 "#;
 
