@@ -238,6 +238,8 @@ const PROGRAM_SOURCE: &str = r#"
 // FCLEN - n/32
 // WFLEN - wavefront length
 
+#pragma OPENCL EXTENSION cl_khr_int64_base_atomics : enable
+
 #define GROUP_LEN (WFLEN)
 
 #if CONST_K < 5 || CONST_K > 9
@@ -1652,9 +1654,13 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
     const uint neid = (eid + 1 < FCLEN) ? eid + 1 : 0;
         
     global CombTask* comb_task = comb_tasks + tid;
+    uint comb_k_l1 = comb_task->comb_k_l1;
+    uint comb_k_l2 = comb_task->comb_k_l2;
     if (comb_task->comb_k_l2 == CONST_N)
         return;
     
+    local uint comb_filled_group[GTASK_LEN*FCLEN];
+    local uint* comb_filled = comb_filled_group + tid*FCLEN;
     local uint l1_filled_group[GTASK_LEN*FCLEN];
     local uint* l1_filled = l1_filled_group + tid*FCLEN;
     local uint l2_filled_group[GTASK_LEN*FCLEN];
@@ -1673,12 +1679,15 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
         l1_filled_l2_templ[FCLEN*i + eid] = comb_task->filled_l2[FCLEN*i + eid];
         l2_filled_l2[FCLEN*i + eid] = comb_task->l2_filled_l2[FCLEN*i + eid];
     }
-    
+    comb_filled[eid] = comb_task->comb_filled[eid];
     uint it = 0;
     uint iit = 0;
     for (it = 0; it < L2_ITER_MAX; it++) {
-        if (comb_task->comb_k_l1+1 == comb_task->comb_k_l2) {
-            // apply shift
+        if (comb_k_l2 == CONST_N)
+            break;
+        if (comb_k_l1+1 == comb_k_l2) {
+            APPLY_FILLED_LX(l1_filled_l1, comb_filled, l1_filled);
+            l2_filled_l2[eid] = l1_filled_l2_templ[eid];
             for (i = 0; i < L1L2_TOTAL_SUMS; i += GROUP_LEN) {
                 if (i + lid < L1L2_TOTAL_SUMS) {
                     const uint j0 = l1l2_ij_table[i+lid][0];
@@ -1691,24 +1700,50 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
         }
         for (iit = 0; iit < L2_ITER_MAX; iit++) {
             // apply filled
-            APPLY_FILLED_LX(l2_filled_l2, l1_filled, l2_filled);
-            SHIFT_FILLED_LX(l2_filled_l2);
-            FILLED_EQUAL(l2_filled_l2,{});
-        }
-        SHIFT_FILLED_LX(l1_filled_l1);
-        uint l1l2pos = 0;
-        // USE TABLE of (i,j)
-        for (i = 0; i < L1L2_TOTAL_SUMS; i += GROUP_LEN) {
-            if (i + lid < L1L2_TOTAL_SUMS) {
-                uint sum = comb_task->filled_l1l2_sums[i+lid] +
-                    (uint)l1l2_ij_table[i+lid][0] + (uint)l1l2_ij_table[i+lid][1] + 2;
-                if (sum >= CONST_N) {
-                    sum -= CONST_N;
-                }
-                comb_task->filled_l1l2_sums[i+lid] = sum;
+            if (comb_k_l2 < CONST_N) {
+                APPLY_FILLED_LX(l2_filled_l2, l1_filled, l2_filled);
+                SHIFT_FILLED_LX(l2_filled_l2);
+                
+#define MAX_RESULT (10000)
+#define REPORT_SOL \
+{ \
+    ulong old = atom_inc(result_count); \
+    if (old < MAX_RESULT) { \
+        results[old*3] = tid; \
+        results[old*3 + 1] = comb_k_l1; \
+        results[old*3 + 2] = comb_k_l2; \
+    } \
+}
+                
+                FILLED_EQUAL(l2_filled_l2,REPORT_SOL);
+                comb_k_l2++;
             }
         }
-        SHIFT_FILLED_LX(l1_filled_l2_templ);
+        if (comb_k_l2 >= CONST_N) {
+            comb_k_l1++;
+            comb_k_l2 = comb_k_l1 + 1;
+            SHIFT_FILLED_LX(l1_filled_l1);
+            uint l1l2pos = 0;
+            // USE TABLE of (i,j)
+            for (i = 0; i < L1L2_TOTAL_SUMS; i += GROUP_LEN) {
+                if (i + lid < L1L2_TOTAL_SUMS) {
+                    uint sum = comb_task->filled_l1l2_sums[i+lid] +
+                        (uint)l1l2_ij_table[i+lid][0] + (uint)l1l2_ij_table[i+lid][1] + 2;
+                    if (sum >= CONST_N) {
+                        sum -= CONST_N;
+                    }
+                    comb_task->filled_l1l2_sums[i+lid] = sum;
+                }
+            }
+            SHIFT_FILLED_LX(l1_filled_l2_templ);
+        }
+    }
+    comb_task->comb_k_l1 = comb_k_l1;
+    comb_task->comb_k_l2 = comb_k_l2;
+    for (i = 0; i < CONST_K; i++) {
+        comb_task->filled_l1[FCLEN*i + eid] = l1_filled_l1[FCLEN*i + eid];
+        comb_task->filled_l2[FCLEN*i + eid] = l1_filled_l2_templ[FCLEN*i + eid];
+        comb_task->l2_filled_l2[FCLEN*i + eid] = l2_filled_l2[FCLEN*i + eid];
     }
 }
 "#;
