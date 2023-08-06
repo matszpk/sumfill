@@ -332,6 +332,8 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
     
     // main loop
     while (true) {
+    //uint ii;
+    //for (ii = 0; ii < 100; ii++) {
         // fill up comb task
         uint sum = 0;
         for (i = 0; i < CONST_K; i++)
@@ -356,7 +358,7 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
                 if (l2count == 0)
                     comb_tasks->filled_l1[FCLEN*(l1count-1) + (fixsum>>5)] |= 1<<(fixsum & 31);
                 else {
-                    const uint vec_id = (l1count-1) + (l2count-1);
+                    const uint vec_id = CONST_K*(l1count-1) + (l2count-1);
                     comb_tasks->filled_l1l2_sums[
                         l1l2_sum_pos[vec_id] + l1l2idx_idx[vec_id]]  = sum;
                     l1l2idx_idx[vec_id] += 1;
@@ -376,8 +378,8 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
                     uint j;
                     for (j = 1; j <= ki; j++)
                         numcomb[i + j] = numcomb[i];
+                    break;
                 }
-                break;
             }
             if (ki == len)
                 break;
@@ -573,12 +575,14 @@ impl CLNWork {
                     self.queue.enqueue_write_buffer(&mut self.combs, CL_BLOCKING,
                                 0, &cl_combs, &[])?;
                     let cl_task_num = count as cl_uint;
+                    println!("NDrange: {} {}", count, self.task_num);
                     ExecuteKernel::new(&self.init_sum_fill_diff_change_kernel)
                             .set_arg(&cl_task_num)
                             .set_arg(&self.combs)
                             .set_arg(&self.free_list)
                             .set_arg(&self.comb_tasks)
-                            .set_global_work_size(count)
+                            .set_local_work_size(64)
+                            .set_global_work_size((count + 63) >> 6)
                             .enqueue_nd_range(&self.queue)?;
                     // //
                     //             uint task_num, global const uint* combs,
