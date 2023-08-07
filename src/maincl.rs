@@ -1704,15 +1704,27 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
             for (i = 0; i < CONST_K; i++)
                 l2_filled_l2[i*FCLEN + eid] = l1_filled_l2_templ[i*FCLEN + eid];
             barrier(CLK_LOCAL_MEM_FENCE);
-            for (i = 0; i < L1L2_TOTAL_SUMS; i += FCLEN) {
+            /*for (i = 0; i < L1L2_TOTAL_SUMS; i += FCLEN) {
                 if (i + eid < L1L2_TOTAL_SUMS) {
                     const uint j0 = l1l2_ij_table[i+eid][0];
                     const uint j1 = l1l2_ij_table[i+eid][1];
                     const uint fixsum = comb_task->filled_l1l2_sums[i+eid] + FIX_SH;
-                    atomic_or(&l2_filled_l2[FCLEN*(j0*CONST_K + j1) + (fixsum >> 5)],
+                    atomic_or(&l2_filled_l2[FCLEN*(j1) + (fixsum >> 5)],
                                 1<<(fixsum&31));
                 }
                 barrier(CLK_LOCAL_MEM_FENCE);
+            }*/
+            if (eid == 0) {
+                uint j0, j1;
+                for (j0 = 0; j0 < CONST_K; j0++)
+                    for (j1 = 0; j1 < CONST_K-j0; j1++) {
+                        uint ei;
+                        const uint eiend = l1l2_sum_pos[j0*CONST_K + j1 + 1];
+                        for (ei = l1l2_sum_pos[j0*CONST_K + j1]; ei < eiend; ei++) {
+                            const uint fixsum = comb_task->filled_l1l2_sums[ei] + FIX_SH;
+                            l2_filled_l2[FCLEN*j1 + (fixsum>>5)] |= 1<<(fixsum&31);
+                        }
+                    }
             }
         }
 #define MAX_RESULT (10000)
