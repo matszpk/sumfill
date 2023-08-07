@@ -1600,12 +1600,13 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
     const uint grid = get_group_id(0);
     const uint lid = get_local_id(0);
     const uint GTASK_LEN = (GROUP_LEN / FCLEN);
-    const uint tid = GTASK_LEN * grid + lid / FCLEN;
+    const uint ltid = lid / FCLEN;
+    const uint tid = GTASK_LEN * grid + ltid;
     if (tid >= task_num)
         return;
     if (lid >= (GROUP_LEN / FCLEN) * FCLEN)
         return;
-    const uint eid = lid - tid*FCLEN;
+    const uint eid = lid - ltid*FCLEN;
     const uint neid = (eid + 1 < FCLEN) ? eid + 1 : 0;
         
     global CombTask* comb_task = comb_tasks + tid;
@@ -2170,6 +2171,7 @@ fn main() {
     // }
     {
         let mut clnwork = CLNWork::new(0, 256, 7).unwrap();
-        clnwork.test_init_kernel().unwrap();
+        //clnwork.test_init_kernel().unwrap();
+        clnwork.test_calc().unwrap();
     }
 }
