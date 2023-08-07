@@ -1679,8 +1679,8 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
 { \
     ulong old = atom_inc(result_count); \
     if (old < MAX_RESULT) { \
-        if (eid < CONST_K-2) \
-            results[CONST_K*old + eid] = comb_task->comb[eid]; \
+        for (i = 0; i < CONST_K-2; i++) \
+            results[CONST_K*old + i] = comb_task->comb[i]; \
         results[CONST_K*old + CONST_K - 2] = comb_k_l1; \
         results[CONST_K*old + CONST_K - 1] = comb_k_l2; \
     } \
@@ -1705,10 +1705,10 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
                     printf("PrevL1filledL2Templ:%u: %u %u : %08x\n",
                             comb_k_l1, i, eid, l1_filled_l2_templ[FCLEN*i + eid]);
                 }*/
-                if (eid == 0)
+                /*if (eid == 0)
                     for (i = 0; i < L1L2_TOTAL_SUMS; i++)
                         printf("PrevL1L2Sums: %u: %u: %u\n", comb_k_l1, i,
-                                comb_task->filled_l1l2_sums[i]);
+                                comb_task->filled_l1l2_sums[i]);*/
             }
             // DEBUG
             SHIFT_FILLED_LX(l1_filled_l1);
@@ -1732,10 +1732,10 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
                     printf("L1filledL2Templ:%u: %u %u : %08x\n",
                             comb_k_l1, i, eid, l1_filled_l2_templ[FCLEN*i + eid]);
                 }*/
-                if (eid == 0)
+                /*if (eid == 0)
                     for (i = 0; i < L1L2_TOTAL_SUMS; i++)
                         printf("L1L2Sums: %u: %u: %u\n", comb_k_l1, i,
-                                comb_task->filled_l1l2_sums[i]);
+                                comb_task->filled_l1l2_sums[i]);*/
             }
             // DEBUG
         }
