@@ -1600,7 +1600,7 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
     const uint grid = get_group_id(0);
     const uint lid = get_local_id(0);
     const uint GTASK_LEN = (GROUP_LEN / FCLEN);
-    const uint tid = (GROUP_LEN / FCLEN) * grid + lid / FCLEN;
+    const uint tid = GTASK_LEN * grid + lid / FCLEN;
     if (tid >= task_num)
         return;
     if (lid >= (GROUP_LEN / FCLEN) * FCLEN)
