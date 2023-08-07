@@ -1616,17 +1616,17 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
         return;
     
     local uint comb_filled_group[GTASK_LEN*FCLEN];
-    local uint* comb_filled = comb_filled_group + tid*FCLEN;
+    local uint* comb_filled = comb_filled_group + ltid*FCLEN;
     local uint l1_filled_group[GTASK_LEN*FCLEN];
-    local uint* l1_filled = l1_filled_group + tid*FCLEN;
+    local uint* l1_filled = l1_filled_group + ltid*FCLEN;
     local uint l2_filled_group[GTASK_LEN*FCLEN];
-    local uint* l2_filled = l2_filled_group + tid*FCLEN;
+    local uint* l2_filled = l2_filled_group + ltid*FCLEN;
     local uint l1_filled_l1_group[GTASK_LEN*FCLEN*CONST_K];
-    local uint* l1_filled_l1 = l1_filled_l1_group + tid*FCLEN*CONST_K;
+    local uint* l1_filled_l1 = l1_filled_l1_group + ltid*FCLEN*CONST_K;
     local uint l1_filled_l2_templ_group[GTASK_LEN*FCLEN*CONST_K];
-    local uint* l1_filled_l2_templ = l1_filled_l2_templ_group + tid*FCLEN*CONST_K;
+    local uint* l1_filled_l2_templ = l1_filled_l2_templ_group + ltid*FCLEN*CONST_K;
     local uint l2_filled_l2_group[GTASK_LEN*FCLEN*CONST_K];
-    local uint* l2_filled_l2 = l2_filled_l2_group + tid*FCLEN*CONST_K;
+    local uint* l2_filled_l2 = l2_filled_l2_group + ltid*FCLEN*CONST_K;
     
     uint i;
     for (i = 0; i < CONST_K; i++) {
@@ -1634,6 +1634,15 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
         l1_filled_l2_templ[FCLEN*i + eid] = comb_task->filled_l2[FCLEN*i + eid];
         l2_filled_l2[FCLEN*i + eid] = comb_task->l2_filled_l2[FCLEN*i + eid];
     }
+    // DEBUG
+    /*if (tid == 1000) {
+        for (i = 0; i < CONST_K; i++) {
+            printf("L1filledL1     : %u %u : %08x\n", i, eid, l1_filled_l1[FCLEN*i + eid]);
+            printf("L1filledL2Templ: %u %u : %08x\n", i, eid, l1_filled_l2_templ[FCLEN*i + eid]);
+        }
+        printf("CombL1L2: %u %u\n", comb_k_l1, comb_k_l2);
+    }*/
+    //DEBUG
     comb_filled[eid] = comb_task->comb_filled[eid];
     
     uint it = 0;
@@ -1641,6 +1650,16 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
     for (it = 0; it < L1_ITER_MAX; it++) {
         if (comb_k_l2 == CONST_N)
             break;
+        // DEBUG
+        /*if (tid == 1000) {
+            for (i = 0; i < CONST_K; i++) {
+                printf("PrevL1filledL1     :%u %u: %u %u : %08x\n",
+                        comb_k_l1, comb_k_l2, i, eid, l1_filled_l1[FCLEN*i + eid]);
+                printf("PrevL1filledL2Templ:%u %u: %u %u : %08x\n",
+                        comb_k_l1, comb_k_l2, i, eid, l1_filled_l2_templ[FCLEN*i + eid]);
+            }
+        }*/
+        // DEBUG
         if (comb_k_l1+1 == comb_k_l2) {
             APPLY_FILLED_LX(l1_filled_l1, comb_filled, l1_filled);
             for (i = 0; i < CONST_K; i++)
@@ -1692,6 +1711,16 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
                 }
             }
             SHIFT_FILLED_LX(l1_filled_l2_templ);
+            // DEBUG
+            /*if (tid == 1000) {
+                for (i = 0; i < CONST_K; i++) {
+                    printf("L1filledL1     :%u: %u %u : %08x\n",
+                            comb_k_l1, i, eid, l1_filled_l1[FCLEN*i + eid]);
+                    printf("L1filledL2Templ:%u: %u %u : %08x\n",
+                            comb_k_l1, i, eid, l1_filled_l2_templ[FCLEN*i + eid]);
+                }
+            }*/
+            // DEBUG
         }
     }
     comb_task->comb_k_l1 = comb_k_l1;
@@ -2006,6 +2035,7 @@ impl CLNWork {
             count += 1;
             
             if !has_next || count == free_list_num {
+                println!("FXXX:");
                 unsafe {
                     let cl_task_num = count as cl_uint;
                     // initialize comb_tasks
