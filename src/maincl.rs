@@ -1690,7 +1690,7 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
             if (comb_k_l2 < CONST_N) {
                 APPLY_FILLED_LX(l2_filled_l2, l1_filled, l2_filled);
                 SHIFT_FILLED_LX(l2_filled_l2);
-                FILLED_EQUAL(l2_filled_l2,REPORT_SOL);
+                FILLED_EQUAL(l2_filled,REPORT_SOL);
                 comb_k_l2++;
             }
         }
