@@ -1642,7 +1642,8 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
             break;
         if (comb_k_l1+1 == comb_k_l2) {
             APPLY_FILLED_LX(l1_filled_l1, comb_filled, l1_filled);
-            l2_filled_l2[eid] = l1_filled_l2_templ[eid];
+            for (i = 0; i < CONST_K; i++)
+                l2_filled_l2[i*FCLEN + eid] = l1_filled_l2_templ[i*FCLEN + eid];
             for (i = 0; i < L1L2_TOTAL_SUMS; i += GROUP_LEN) {
                 if (i + lid < L1L2_TOTAL_SUMS) {
                     const uint j0 = l1l2_ij_table[i+lid][0];
