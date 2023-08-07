@@ -2093,6 +2093,7 @@ impl CLNWork {
                         0, &comb_tasks, &[])?;
             }
         }
+        self.queue.finish()?;
         
         let mut comb_iter = CombineIter::new(self.k - 2, self.n - 2);
         let mut final_comb = vec![0; self.k];
@@ -2124,6 +2125,7 @@ impl CLNWork {
                     // initialize comb_tasks
                     self.queue.enqueue_write_buffer(&mut self.combs, CL_BLOCKING,
                                 0, &cl_combs, &[])?;
+                    self.queue.finish()?;
                     ExecuteKernel::new(&self.init_sum_fill_diff_change_kernel)
                             .set_arg(&cl_task_num)
                             .set_arg(&self.combs)
@@ -2133,6 +2135,7 @@ impl CLNWork {
                             .set_global_work_size((((count + self.group_len - 1)
                                     / self.group_len)) * self.group_len)
                             .enqueue_nd_range(&self.queue)?;
+                    self.queue.finish()?;
                     {   // reset free_list_num
                         let free_list_num = [0 as cl_uint];
                         self.queue.enqueue_write_buffer(&mut self.free_list_num,
@@ -2164,6 +2167,7 @@ impl CLNWork {
                             break;  // do load next tasks
                         }
                         xcount += 1;
+                        self.queue.finish()?;
                     }
                 }
                 {
