@@ -2217,7 +2217,7 @@ fn main() {
     //     //calc_min_sumn_to_fill_par_all_opencl(i);
     // }
     {
-        let mut clnwork = CLNWork::new(0, 256, 7).unwrap();
+        let mut clnwork = CLNWork::new(0, 320, 7).unwrap();
         //clnwork.test_init_kernel().unwrap();
         clnwork.test_calc().unwrap();
     }
