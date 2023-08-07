@@ -1647,7 +1647,7 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
             for (i = 0; i < L1L2_TOTAL_SUMS; i += GROUP_LEN) {
                 if (i + lid < L1L2_TOTAL_SUMS) {
                     const uint j0 = l1l2_ij_table[i+lid][0];
-                    const uint j1 = (uint)l1l2_ij_table[i+lid][1];
+                    const uint j1 = l1l2_ij_table[i+lid][1];
                     const uint fixsum = comb_task->filled_l1l2_sums[i+lid] + FIX_SH;
                     atomic_or(&l2_filled_l2[FCLEN*(j0*CONST_K + j1) + (fixsum >> 5)],
                                 1<<(fixsum&31));
