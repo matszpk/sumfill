@@ -1689,6 +1689,7 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
     uint it = 0;
     uint iit = 0;
     APPLY_FILLED_LX(l1_filled_l1, comb_filled, l1_filled);
+    barrier(CLK_LOCAL_MEM_FENCE);
     for (it = 0; it < L1_ITER_MAX; it++) {
         if (comb_k_l2 == CONST_N)
             break;
@@ -1704,6 +1705,7 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
         // DEBUG
         if (comb_k_l1+1 == comb_k_l2) {
             APPLY_FILLED_LX(l1_filled_l1, comb_filled, l1_filled);
+            barrier(CLK_LOCAL_MEM_FENCE);
             for (i = 0; i < CONST_K; i++)
                 l2_filled_l2[i*FCLEN + eid] = l1_filled_l2_templ[i*FCLEN + eid];
             barrier(CLK_LOCAL_MEM_FENCE);
