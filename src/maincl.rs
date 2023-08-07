@@ -1294,6 +1294,7 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
         (FL1)[FCLEN*3 + eid] | \
         (FL1)[FCLEN*4 + eid] | \
         (FL1)[FCLEN*5 + eid]; \
+    barrier(CLK_LOCAL_MEM_FENCE); \
 }
 #endif
 
@@ -1308,6 +1309,7 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
         (FL1)[FCLEN*4 + eid] | \
         (FL1)[FCLEN*5 + eid] | \
         (FL1)[FCLEN*6 + eid]; \
+    barrier(CLK_LOCAL_MEM_FENCE); \
 }
 #endif
 
@@ -1323,6 +1325,7 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
         (FL1)[FCLEN*5 + eid] | \
         (FL1)[FCLEN*6 + eid] | \
         (FL1)[FCLEN*7 + eid]; \
+    barrier(CLK_LOCAL_MEM_FENCE); \
 }
 #endif
 
@@ -1339,6 +1342,7 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
         (FL1)[FCLEN*6 + eid] | \
         (FL1)[FCLEN*7 + eid] | \
         (FL1)[FCLEN*8 + eid]; \
+    barrier(CLK_LOCAL_MEM_FENCE); \
 }
 #endif
 
@@ -1346,16 +1350,22 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
 { \
     uint temp = ((FL1)[FCLEN*0 + eid] << 1) | ((FL1)[FCLEN*0 + peid] >> (32-1)); \
     (FL1)[FCLEN*0 + eid] = temp; \
+    barrier(CLK_LOCAL_MEM_FENCE); \
     temp = ((FL1)[FCLEN*1 + eid] << 2) | ((FL1)[FCLEN*1 + peid] >> (32-2)); \
     (FL1)[FCLEN*1 + eid] = temp; \
+    barrier(CLK_LOCAL_MEM_FENCE); \
     temp = ((FL1)[FCLEN*2 + eid] << 3) | ((FL1)[FCLEN*2 + peid] >> (32-3)); \
     (FL1)[FCLEN*2 + eid] = temp; \
+    barrier(CLK_LOCAL_MEM_FENCE); \
     temp = ((FL1)[FCLEN*3 + eid] << 4) | ((FL1)[FCLEN*3 + peid] >> (32-4)); \
     (FL1)[FCLEN*3 + eid] = temp; \
+    barrier(CLK_LOCAL_MEM_FENCE); \
     temp = ((FL1)[FCLEN*4 + eid] << 5) | ((FL1)[FCLEN*4 + peid] >> (32-5)); \
     (FL1)[FCLEN*4 + eid] = temp; \
+    barrier(CLK_LOCAL_MEM_FENCE); \
     temp = ((FL1)[FCLEN*5 + eid] << 6) | ((FL1)[FCLEN*5 + peid] >> (32-6)); \
     (FL1)[FCLEN*5 + eid] = temp; \
+    barrier(CLK_LOCAL_MEM_FENCE); \
 }
 
 #define SHIFT_FILLED_LX_7_NFX(FL1) \
@@ -1363,6 +1373,7 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
     SHIFT_FILLED_LX_6_NFX(FL1); \
     uint temp = ((FL1)[FCLEN*6 + eid] << 7) | ((FL1)[FCLEN*6 + peid] >> (32-7)); \
     (FL1)[FCLEN*6 + eid] = temp; \
+    barrier(CLK_LOCAL_MEM_FENCE); \
 }
 
 #define SHIFT_FILLED_LX_8_NFX(FL1) \
@@ -1370,6 +1381,7 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
     SHIFT_FILLED_LX_7_NFX(FL1); \
     uint temp = ((FL1)[FCLEN*7 + eid] << 8) | ((FL1)[FCLEN*7 + peid] >> (32-8)); \
     (FL1)[FCLEN*7 + eid] = temp; \
+    barrier(CLK_LOCAL_MEM_FENCE); \
 }
 
 #define SHIFT_FILLED_LX_9_NFX(FL1) \
@@ -1377,6 +1389,7 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
     SHIFT_FILLED_LX_8_NFX(FL1); \
     uint temp = ((FL1)[FCLEN*8 + eid] << 9) | ((FL1)[FCLEN*8 + peid] >> (32-9)); \
     (FL1)[FCLEN*8 + eid] = temp; \
+    barrier(CLK_LOCAL_MEM_FENCE); \
 }
 
 #define LAST_SHIFT_FILLED_LX_NFC(FL1) \
@@ -1392,24 +1405,28 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
 { \
     SHIFT_FILLED_LX_6_NFX(FL1); \
     LAST_SHIFT_FILLED_LX_NFC(FL1); \
+    barrier(CLK_LOCAL_MEM_FENCE); \
 }
 
 #define SHIFT_FILLED_LX_7_NFC(FL1) \
 { \
     SHIFT_FILLED_LX_7_NFX(FL1); \
     LAST_SHIFT_FILLED_LX_NFC(FL1); \
+    barrier(CLK_LOCAL_MEM_FENCE); \
 }
 
 #define SHIFT_FILLED_LX_8_NFC(FL1) \
 { \
     SHIFT_FILLED_LX_8_NFX(FL1); \
     LAST_SHIFT_FILLED_LX_NFC(FL1); \
+    barrier(CLK_LOCAL_MEM_FENCE); \
 }
 
 #define SHIFT_FILLED_LX_9_NFC(FL1) \
 { \
     SHIFT_FILLED_LX_9_NFX(FL1); \
     LAST_SHIFT_FILLED_LX_NFC(FL1); \
+    barrier(CLK_LOCAL_MEM_FENCE); \
 }
 
 #define LAST_SHIFT_FILLED_LX_FULL(FL1) \
@@ -1421,30 +1438,35 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
             (vold << FIX_SH); \
         (FL1)[eid*FCLEN + 1] |= (vold>>(32-FIX_SH)); \
     } \
+    barrier(CLK_LOCAL_MEM_FENCE); \
 }
 
 #define SHIFT_FILLED_LX_6_FULL(FL1) \
 { \
     SHIFT_FILLED_LX_6_NFX(FL1); \
     LAST_SHIFT_FILLED_LX_FULL(FL1); \
+    barrier(CLK_LOCAL_MEM_FENCE); \
 }
 
 #define SHIFT_FILLED_LX_7_FULL(FL1) \
 { \
     SHIFT_FILLED_LX_7_NFX(FL1); \
     LAST_SHIFT_FILLED_LX_FULL(FL1); \
+    barrier(CLK_LOCAL_MEM_FENCE); \
 }
 
 #define SHIFT_FILLED_LX_8_FULL(FL1) \
 { \
     SHIFT_FILLED_LX_8_NFX(FL1); \
     LAST_SHIFT_FILLED_LX_FULL(FL1); \
+    barrier(CLK_LOCAL_MEM_FENCE); \
 }
 
 #define SHIFT_FILLED_LX_9_FULL(FL1) \
 { \
     SHIFT_FILLED_LX_9_NFX(FL1); \
     LAST_SHIFT_FILLED_LX_FULL(FL1); \
+    barrier(CLK_LOCAL_MEM_FENCE); \
 }
 
 #if FIX_SH == 0
@@ -1511,6 +1533,7 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
 { \
     if (eid == 0) \
         (OF)[0] &= (OF)[1]; \
+    barrier(CLK_LOCAL_MEM_FENCE); \
     if (eid == 0 && ((OF)[0] == UINT_MAX)) { \
         REPORT; \
     } \
@@ -1522,8 +1545,10 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
 { \
     if (eid+2 < FCLEN) \
         (OF)[eid+0] &= (OF)[eid+2]; \
+    barrier(CLK_LOCAL_MEM_FENCE); \
     if (eid == 0) \
         (OF)[eid+0] &= (OF)[eid+1]; \
+    barrier(CLK_LOCAL_MEM_FENCE); \
     if (eid==0 && ((OF)[0] == UINT_MAX)) { \
         REPORT; \
     } \
@@ -1535,10 +1560,13 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
 { \
     if (eid+4 < FCLEN) \
         (OF)[eid+0] &= (OF)[eid+4]; \
+    barrier(CLK_LOCAL_MEM_FENCE); \
     if (eid+2 < FCLEN) \
         (OF)[eid+0] &= (OF)[eid+2]; \
+    barrier(CLK_LOCAL_MEM_FENCE); \
     if (eid == 0) \
         (OF)[eid+0] &= (OF)[eid+1]; \
+    barrier(CLK_LOCAL_MEM_FENCE); \
     if (eid==0 && ((OF)[0] == UINT_MAX)) { \
         REPORT; \
     } \
@@ -1550,12 +1578,16 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
 { \
     if (eid+8 < FCLEN) \
         (OF)[eid+0] &= (OF)[eid+8]; \
+    barrier(CLK_LOCAL_MEM_FENCE); \
     if (eid+4 < FCLEN) \
         (OF)[eid+0] &= (OF)[eid+4]; \
+    barrier(CLK_LOCAL_MEM_FENCE); \
     if (eid+2 < FCLEN) \
         (OF)[eid+0] &= (OF)[eid+2]; \
+    barrier(CLK_LOCAL_MEM_FENCE); \
     if (eid == 0) \
         (OF)[eid+0] &= (OF)[eid+1]; \
+    barrier(CLK_LOCAL_MEM_FENCE); \
     if (eid==0 && ((OF)[0] == UINT_MAX)) { \
         REPORT; \
     } \
@@ -1567,14 +1599,19 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
 { \
     if (eid+16 < FCLEN) \
         (OF)[eid+0] &= (OF)[eid+16]; \
+    barrier(CLK_LOCAL_MEM_FENCE); \
     if (eid+8 < FCLEN) \
         (OF)[eid+0] &= (OF)[eid+8]; \
+    barrier(CLK_LOCAL_MEM_FENCE); \
     if (eid+4 < FCLEN) \
         (OF)[eid+0] &= (OF)[eid+4]; \
+    barrier(CLK_LOCAL_MEM_FENCE); \
     if (eid+2 < FCLEN) \
         (OF)[eid+0] &= (OF)[eid+2]; \
+    barrier(CLK_LOCAL_MEM_FENCE); \
     if (eid == 0) \
         (OF)[eid+0] &= (OF)[eid+1]; \
+    barrier(CLK_LOCAL_MEM_FENCE); \
     if (eid==0 && ((OF)[0] == UINT_MAX)) { \
         REPORT; \
     }
@@ -1586,6 +1623,7 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
 { \
     if (eid == 0) \
         (OF)[0] |= ((1<<FIX_SH)-1); \
+    barrier(CLK_LOCAL_MEM_FENCE); \
     FILLED_EQUAL_NFX(OF,REPORT); \
 }
 #else
@@ -1634,6 +1672,7 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
         l1_filled_l2_templ[FCLEN*i + eid] = comb_task->filled_l2[FCLEN*i + eid];
         l2_filled_l2[FCLEN*i + eid] = comb_task->l2_filled_l2[FCLEN*i + eid];
     }
+    barrier(CLK_LOCAL_MEM_FENCE);
     // DEBUG
     /*if (tid == 1000) {
         for (i = 0; i < CONST_K; i++) {
@@ -1664,6 +1703,7 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
             APPLY_FILLED_LX(l1_filled_l1, comb_filled, l1_filled);
             for (i = 0; i < CONST_K; i++)
                 l2_filled_l2[i*FCLEN + eid] = l1_filled_l2_templ[i*FCLEN + eid];
+            barrier(CLK_LOCAL_MEM_FENCE);
             for (i = 0; i < L1L2_TOTAL_SUMS; i += FCLEN) {
                 if (i + eid < L1L2_TOTAL_SUMS) {
                     const uint j0 = l1l2_ij_table[i+eid][0];
@@ -1672,6 +1712,7 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
                     atomic_or(&l2_filled_l2[FCLEN*(j0*CONST_K + j1) + (fixsum >> 5)],
                                 1<<(fixsum&31));
                 }
+                barrier(CLK_LOCAL_MEM_FENCE);
             }
         }
 #define MAX_RESULT (10000)
@@ -1684,6 +1725,7 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
         results[CONST_K*old + CONST_K - 2] = comb_k_l1; \
         results[CONST_K*old + CONST_K - 1] = comb_k_l2; \
     } \
+    barrier(CLK_GLOBAL_MEM_FENCE); \
 }
         for (iit = 0; iit < L2_ITER_MAX; iit++) {
             // apply filled
@@ -1694,6 +1736,7 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
                 comb_k_l2++;
             }
         }
+        barrier(CLK_LOCAL_MEM_FENCE);
         if (comb_k_l2 >= CONST_N) {
             comb_k_l1++;
             comb_k_l2 = comb_k_l1 + 1;
@@ -1712,6 +1755,7 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
             }
             // DEBUG
             SHIFT_FILLED_LX(l1_filled_l1);
+            barrier(CLK_LOCAL_MEM_FENCE);
             uint l1l2pos = 0;
             // USE TABLE of (i,j)
             for (i = 0; i < L1L2_TOTAL_SUMS; i += FCLEN) {
@@ -1722,8 +1766,10 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
                         sum -= CONST_N;
                     comb_task->filled_l1l2_sums[i+eid] = sum;
                 }
+                barrier(CLK_LOCAL_MEM_FENCE);
             }
             SHIFT_FILLED_LX(l1_filled_l2_templ);
+            barrier(CLK_LOCAL_MEM_FENCE);
             // DEBUG
             if (tid == 1000) {
                 /*for (i = 0; i < CONST_K; i++) {
