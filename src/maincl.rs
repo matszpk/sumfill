@@ -1688,6 +1688,7 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
     
     uint it = 0;
     uint iit = 0;
+    APPLY_FILLED_LX(l1_filled_l1, comb_filled, l1_filled);
     for (it = 0; it < L1_ITER_MAX; it++) {
         if (comb_k_l2 == CONST_N)
             break;
