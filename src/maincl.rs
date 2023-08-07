@@ -1188,6 +1188,7 @@ constant uchar l1l2_ij_table[][2] = {
 #endif
 
 typedef struct _CombTask {
+    uint comb[CONST_K-2];
     uint comb_filled[FCLEN];
     uint filled_l1[FCLEN*CONST_K];
     uint filled_l1l2_sums[L1L2_TOTAL_SUMS];
@@ -1207,6 +1208,8 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
     global CombTask* comb_task = comb_tasks + cbidx;
     //
     uint i;
+    for (i = 0; i < CONST_K-2; i++)
+        comb_task->comb[i] = comb[i];
     for (i = 0; i < FCLEN; i++)
         comb_task->comb_filled[i] = 0;
     for (i = 0; i < FCLEN*CONST_K; i++) {
@@ -1406,9 +1409,9 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
 #define LAST_SHIFT_FILLED_LX_NFC(FL1) \
 { \
     if (lid < CONST_K) { \
-        const uint mask = ((2<<lid)-1); \
-        (FL1)[lid*FCLEN] = ((FL1)[lid*FCLEN] & ~mask) | \
-            (((FL1)[lid*FCLEN + FCLEN-1] & mask) << FIX_SH); \
+        const uint mask = ((2<<eid)-1); \
+        (FL1)[eid*FCLEN] = ((FL1)[eid*FCLEN] & ~mask) | \
+            (((FL1)[eid*FCLEN + FCLEN-1] & mask) << FIX_SH); \
     } \
 }
 
@@ -1444,12 +1447,12 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
 
 #define LAST_SHIFT_FILLED_LX_FULL(FL1) \
 { \
-    if (lid < CONST_K) { \
-        const uint mask = ((2<<lid)-1); \
-        uint vold = (FL1)[lid*FCLEN + FCLEN-1] & mask; \
-        (FL1)[lid*FCLEN] = ((FL1)[lid*FCLEN] & ~mask) | \
+    if (eid < CONST_K) { \
+        const uint mask = ((2<<eid)-1); \
+        uint vold = (FL1)[eid*FCLEN + FCLEN-1] & mask; \
+        (FL1)[eid*FCLEN] = ((FL1)[eid*FCLEN] & ~mask) | \
             (vold << FIX_SH); \
-        (FL1)[lid*FCLEN + 1] |= (vold>>(32-FIX_SH)); \
+        (FL1)[eid*FCLEN + 1] |= (vold>>(32-FIX_SH)); \
     } \
 }
 
@@ -1703,9 +1706,10 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
 { \
     ulong old = atom_inc(result_count); \
     if (old < MAX_RESULT) { \
-        results[old*3] = tid; \
-        results[old*3 + 1] = comb_k_l1; \
-        results[old*3 + 2] = comb_k_l2; \
+        if (eid < CONST_K-2) \
+            results[CONST_K*old + eid] = comb_task->comb[eid]; \
+        results[CONST_K*old + CONST_K - 2] = comb_k_l1; \
+        results[CONST_K*old + CONST_K - 1] = comb_k_l2; \
     } \
 }
         for (iit = 0; iit < L2_ITER_MAX; iit++) {
@@ -1809,7 +1813,7 @@ impl CLNWork {
             9 => 6435,
             _ => { panic!("Unsupported k"); }
         };
-        let comb_task_len = fclen + k*fclen*3 + l1l2_total_sums + 2;
+        let comb_task_len = (k-2) + fclen + k*fclen*3 + l1l2_total_sums + 2;
         let task_num = (64 / fclen) * (group_num + fclen-1);
         
         let combs = unsafe {
@@ -1826,7 +1830,7 @@ impl CLNWork {
         };
         let results = unsafe {
             Buffer::<cl_uint>::create(&context, CL_MEM_READ_WRITE,
-                            3 * 10000, ptr::null_mut())?
+                            k * 10000, ptr::null_mut())?
         };
         let free_list_num = unsafe {
             Buffer::<cl_uint>::create(&context, CL_MEM_READ_WRITE, 1, ptr::null_mut())?
@@ -1903,14 +1907,17 @@ impl CLNWork {
                 // put to expected cl comb_task
                 let mut exp_comb_task = &mut exp_cl_comb_tasks[
                         self.comb_task_len*count..self.comb_task_len*(count+1)];
+                // copy comb
+                comb.iter().enumerate().for_each(|(i, x)|
+                    exp_comb_task[i] = *x as cl_uint);
                 // copy comb_filled
                 comb_filled.iter().enumerate().for_each(|(i, x)|
-                    exp_comb_task[i] = *x as cl_uint);
+                    exp_comb_task[(self.k-2) + i] = *x as cl_uint);
                 // copy filled_l1
                 filled_l1.iter().enumerate().for_each(|(i, x)|
-                    exp_comb_task[filled_clen + i] = *x as cl_uint);
+                    exp_comb_task[(self.k-2) + filled_clen + i] = *x as cl_uint);
                 // copy filled_l1l2_sum
-                let mut idx = filled_clen + filled_clen*self.k;
+                let mut idx = (self.k-2) + filled_clen + filled_clen*self.k;
                 for j in 0..self.k*self.k {
                     filled_l1l2_sums[j].iter().enumerate().for_each(|(i,x)|
                         exp_comb_task[idx + i] = *x as cl_uint);
