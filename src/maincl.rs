@@ -1344,38 +1344,38 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
 
 #define SHIFT_FILLED_LX_6_NFX(FL1) \
 { \
-    uint temp = ((FL1)[FCLEN*0 + eid] << 1) | ((FL1)[FCLEN*0 + neid] >> (32-1)); \
+    uint temp = ((FL1)[FCLEN*0 + eid] << 1) | ((FL1)[FCLEN*0 + peid] >> (32-1)); \
     (FL1)[FCLEN*0 + eid] = temp; \
-    temp = ((FL1)[FCLEN*1 + eid] << 2) | ((FL1)[FCLEN*1 + neid] >> (32-2)); \
+    temp = ((FL1)[FCLEN*1 + eid] << 2) | ((FL1)[FCLEN*1 + peid] >> (32-2)); \
     (FL1)[FCLEN*1 + eid] = temp; \
-    temp = ((FL1)[FCLEN*2 + eid] << 3) | ((FL1)[FCLEN*2 + neid] >> (32-3)); \
+    temp = ((FL1)[FCLEN*2 + eid] << 3) | ((FL1)[FCLEN*2 + peid] >> (32-3)); \
     (FL1)[FCLEN*2 + eid] = temp; \
-    temp = ((FL1)[FCLEN*3 + eid] << 4) | ((FL1)[FCLEN*3 + neid] >> (32-4)); \
+    temp = ((FL1)[FCLEN*3 + eid] << 4) | ((FL1)[FCLEN*3 + peid] >> (32-4)); \
     (FL1)[FCLEN*3 + eid] = temp; \
-    temp = ((FL1)[FCLEN*4 + eid] << 5) | ((FL1)[FCLEN*4 + neid] >> (32-5)); \
+    temp = ((FL1)[FCLEN*4 + eid] << 5) | ((FL1)[FCLEN*4 + peid] >> (32-5)); \
     (FL1)[FCLEN*4 + eid] = temp; \
-    temp = ((FL1)[FCLEN*5 + eid] << 6) | ((FL1)[FCLEN*5 + neid] >> (32-6)); \
+    temp = ((FL1)[FCLEN*5 + eid] << 6) | ((FL1)[FCLEN*5 + peid] >> (32-6)); \
     (FL1)[FCLEN*5 + eid] = temp; \
 }
 
 #define SHIFT_FILLED_LX_7_NFX(FL1) \
 { \
     SHIFT_FILLED_LX_6_NFX(FL1); \
-    uint temp = ((FL1)[FCLEN*6 + eid] << 7) | ((FL1)[FCLEN*6 + neid] >> (32-7)); \
+    uint temp = ((FL1)[FCLEN*6 + eid] << 7) | ((FL1)[FCLEN*6 + peid] >> (32-7)); \
     (FL1)[FCLEN*6 + eid] = temp; \
 }
 
 #define SHIFT_FILLED_LX_8_NFX(FL1) \
 { \
     SHIFT_FILLED_LX_7_NFX(FL1); \
-    uint temp = ((FL1)[FCLEN*7 + eid] << 8) | ((FL1)[FCLEN*7 + neid] >> (32-8)); \
+    uint temp = ((FL1)[FCLEN*7 + eid] << 8) | ((FL1)[FCLEN*7 + peid] >> (32-8)); \
     (FL1)[FCLEN*7 + eid] = temp; \
 }
 
 #define SHIFT_FILLED_LX_9_NFX(FL1) \
 { \
     SHIFT_FILLED_LX_8_NFX(FL1); \
-    uint temp = ((FL1)[FCLEN*8 + eid] << 9) | ((FL1)[FCLEN*8 + neid] >> (32-9)); \
+    uint temp = ((FL1)[FCLEN*8 + eid] << 9) | ((FL1)[FCLEN*8 + peid] >> (32-9)); \
     (FL1)[FCLEN*8 + eid] = temp; \
 }
 
@@ -1607,7 +1607,7 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
     if (lid >= GTASK_LEN * FCLEN)
         return;
     const uint eid = lid - ltid*FCLEN;
-    const uint neid = (eid + 1 < FCLEN) ? eid + 1 : 0;
+    const uint peid = (eid > 0) ? (eid-1) : (FCLEN-1);
         
     global CombTask* comb_task = comb_tasks + tid;
     uint comb_k_l1 = comb_task->comb_k_l1;
@@ -1635,13 +1635,13 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
         l2_filled_l2[FCLEN*i + eid] = comb_task->l2_filled_l2[FCLEN*i + eid];
     }
     // DEBUG
-    /*if (tid == 1000) {
+    if (tid == 1000) {
         for (i = 0; i < CONST_K; i++) {
             printf("L1filledL1     : %u %u : %08x\n", i, eid, l1_filled_l1[FCLEN*i + eid]);
             printf("L1filledL2Templ: %u %u : %08x\n", i, eid, l1_filled_l2_templ[FCLEN*i + eid]);
         }
         printf("CombL1L2: %u %u\n", comb_k_l1, comb_k_l2);
-    }*/
+    }
     //DEBUG
     comb_filled[eid] = comb_task->comb_filled[eid];
     
@@ -1653,9 +1653,9 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
         // DEBUG
         /*if (tid == 1000) {
             for (i = 0; i < CONST_K; i++) {
-                printf("PrevL1filledL1     :%u %u: %u %u : %08x\n",
+                printf("LoopL1filledL1     :%u %u: %u %u : %08x\n",
                         comb_k_l1, comb_k_l2, i, eid, l1_filled_l1[FCLEN*i + eid]);
-                printf("PrevL1filledL2Templ:%u %u: %u %u : %08x\n",
+                printf("LoopL1filledL2Templ:%u %u: %u %u : %08x\n",
                         comb_k_l1, comb_k_l2, i, eid, l1_filled_l2_templ[FCLEN*i + eid]);
             }
         }*/
@@ -1697,6 +1697,16 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
         if (comb_k_l2 >= CONST_N) {
             comb_k_l1++;
             comb_k_l2 = comb_k_l1 + 1;
+            // DEBUG
+            if (tid == 1000) {
+                for (i = 0; i < CONST_K; i++) {
+                    printf("PrevL1filledL1     :%u: %u %u : %08x\n",
+                            comb_k_l1, i, eid, l1_filled_l1[FCLEN*i + eid]);
+                    printf("PrevL1filledL2Templ:%u: %u %u : %08x\n",
+                            comb_k_l1, i, eid, l1_filled_l2_templ[FCLEN*i + eid]);
+                }
+            }
+            // DEBUG
             SHIFT_FILLED_LX(l1_filled_l1);
             uint l1l2pos = 0;
             // USE TABLE of (i,j)
@@ -1712,14 +1722,14 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
             }
             SHIFT_FILLED_LX(l1_filled_l2_templ);
             // DEBUG
-            /*if (tid == 1000) {
+            if (tid == 1000) {
                 for (i = 0; i < CONST_K; i++) {
                     printf("L1filledL1     :%u: %u %u : %08x\n",
                             comb_k_l1, i, eid, l1_filled_l1[FCLEN*i + eid]);
                     printf("L1filledL2Templ:%u: %u %u : %08x\n",
                             comb_k_l1, i, eid, l1_filled_l2_templ[FCLEN*i + eid]);
                 }
-            }*/
+            }
             // DEBUG
         }
     }
