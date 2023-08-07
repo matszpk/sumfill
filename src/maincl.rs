@@ -242,22 +242,12 @@ const PROGRAM_SOURCE: &str = r#"
 
 #define GROUP_LEN (WFLEN)
 
-#if CONST_K < 5 || CONST_K > 9
+#if CONST_K < 6 || CONST_K > 9
 #error "Unsupported CONST_K"
 #endif
 
-#if CONST_K == 5
-#define L1L2_TOTAL_SUMS (35)
-constant uint l1l2_sum_pos[25] = {
-    0, 10, 16, 19, 20, 20, 26, 29, 30, 30, 30, 33, 34, 34, 34, 34, 35,
-    35, 35, 35, 35, 35, 35, 35, 35
-};
-constant uchar l1l2_ij_table[][2] = {
-  {0,1},  {0,1},  {0,1},  {0,1},  {0,1},  {0,1},  {0,1},  {0,1},  {0,1},  {0,1},
-  {0,2},  {0,2},  {0,2},  {0,2},  {0,2},  {0,2},  {0,3},  {0,3},  {0,3},  {0,4},
-  {1,1},  {1,1},  {1,1},  {1,1},  {1,1},  {1,1},  {1,2},  {1,2},  {1,2},  {1,3},
-  {2,1},  {2,1},  {2,1},  {2,2},  {3,1},
-};
+#if CONST_N < 161
+#error "Unsupported CONST_N"
 #endif
 
 #if CONST_K == 6
@@ -1294,18 +1284,6 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
 #define L1_ITER_MAX (100)
 #define L2_ITER_MAX (16)
 
-#if CONST_K == 5
-#define APPLY_FILLED_LX(FL1, CF, OF) \
-{ \
-    (OF)[eid] = (CF)[eid] | \
-        (FL1)[FCLEN*0 + eid] | \
-        (FL1)[FCLEN*1 + eid] | \
-        (FL1)[FCLEN*2 + eid] | \
-        (FL1)[FCLEN*3 + eid] | \
-        (FL1)[FCLEN*4 + eid]; \
-}
-#endif
-
 #if CONST_K == 6
 #define APPLY_FILLED_LX(FL1, CF, OF) \
 { \
@@ -1364,7 +1342,7 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
 }
 #endif
 
-#define SHIFT_FILLED_LX_5_NFX(FL1) \
+#define SHIFT_FILLED_LX_6_NFX(FL1) \
 { \
     uint temp = ((FL1)[FCLEN*0 + eid] << 1) | ((FL1)[FCLEN*0 + neid] >> (32-1)); \
     (FL1)[FCLEN*0 + eid] = temp; \
@@ -1376,12 +1354,7 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
     (FL1)[FCLEN*3 + eid] = temp; \
     temp = ((FL1)[FCLEN*4 + eid] << 5) | ((FL1)[FCLEN*4 + neid] >> (32-5)); \
     (FL1)[FCLEN*4 + eid] = temp; \
-}
-
-#define SHIFT_FILLED_LX_6_NFX(FL1) \
-{ \
-    SHIFT_FILLED_LX_5_NFX(FL1); \
-    uint temp = ((FL1)[FCLEN*5 + eid] << 6) | ((FL1)[FCLEN*5 + neid] >> (32-6)); \
+    temp = ((FL1)[FCLEN*5 + eid] << 6) | ((FL1)[FCLEN*5 + neid] >> (32-6)); \
     (FL1)[FCLEN*5 + eid] = temp; \
 }
 
@@ -1413,12 +1386,6 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
         (FL1)[eid*FCLEN] = ((FL1)[eid*FCLEN] & ~mask) | \
             (((FL1)[eid*FCLEN + FCLEN-1] & mask) << FIX_SH); \
     } \
-}
-
-#define SHIFT_FILLED_LX_5_NFC(FL1) \
-{ \
-    SHIFT_FILLED_LX_5_NFX(FL1); \
-    LAST_SHIFT_FILLED_LX_NFC(FL1); \
 }
 
 #define SHIFT_FILLED_LX_6_NFC(FL1) \
@@ -1456,12 +1423,6 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
     } \
 }
 
-#define SHIFT_FILLED_LX_5_FULL(FL1) \
-{ \
-    SHIFT_FILLED_LX_5_NFX(FL1); \
-    LAST_SHIFT_FILLED_LX_FULL(FL1); \
-}
-
 #define SHIFT_FILLED_LX_6_FULL(FL1) \
 { \
     SHIFT_FILLED_LX_6_NFX(FL1); \
@@ -1487,9 +1448,6 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
 }
 
 #if FIX_SH == 0
-#if CONST_K == 5
-#define SHIFT_FILLED_LX(FL1) SHIFT_FILLED_LX_5_NFX(FL1)
-#endif
 #if CONST_K == 6
 #define SHIFT_FILLED_LX(FL1) SHIFT_FILLED_LX_6_NFX(FL1)
 #endif
@@ -1507,9 +1465,6 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
 
 #if (32 - FIX_SH) >= CONST_K
 
-#if CONST_K == 5
-#define SHIFT_FILLED_LX(FL1) SHIFT_FILLED_LX_5_NFX(FL1)
-#endif
 #if CONST_K == 6
 #define SHIFT_FILLED_LX(FL1) SHIFT_FILLED_LX_6_NFX(FL1)
 #endif
@@ -1525,9 +1480,6 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
 
 #else   // if full needed
 
-#if CONST_K == 5
-#define SHIFT_FILLED_LX(FL1) SHIFT_FILLED_LX_5_FULL(FL1)
-#endif
 #if CONST_K == 6
 #define SHIFT_FILLED_LX(FL1) SHIFT_FILLED_LX_6_FULL(FL1)
 #endif
