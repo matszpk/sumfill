@@ -1689,8 +1689,8 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
             // apply filled
             if (comb_k_l2 < CONST_N) {
                 APPLY_FILLED_LX(l2_filled_l2, l1_filled, l2_filled);
-                SHIFT_FILLED_LX(l2_filled_l2);
                 FILLED_EQUAL(l2_filled,REPORT_SOL);
+                SHIFT_FILLED_LX(l2_filled_l2);
                 comb_k_l2++;
             }
         }
@@ -1740,6 +1740,13 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
             // DEBUG
         }
     }
+    // DEBUG
+    /*if (eid == 0 && comb_k_l2 == CONST_N)
+        printf("End: %u [%u %u %u %u %u]: %u %u\n", tid,
+                comb_task->comb[0], comb_task->comb[1], comb_task->comb[2],
+                comb_task->comb[3], comb_task->comb[4],
+                comb_k_l1, comb_k_l2);*/
+    // DEBUG
     comb_task->comb_k_l1 = comb_k_l1;
     comb_task->comb_k_l2 = comb_k_l2;
     for (i = 0; i < CONST_K; i++) {
