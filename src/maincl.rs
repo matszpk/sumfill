@@ -2042,21 +2042,20 @@ impl CLNWork {
         
         loop {
             let comb = comb_iter.get();
+            let has_next_1 = comb[0] == 0 && comb.get(1).copied().unwrap_or(1) == 1;
             
-            if comb[0] != 0 || comb.get(1).copied().unwrap_or(1) != 1 {
-                break;
+            if has_next_1 {
+                final_comb[0..self.k-2].copy_from_slice(comb);
+                final_comb[self.k-2] = final_comb[self.k-3] + 1;
+                final_comb[self.k-1] = final_comb[self.k-3] + 2;
+                
+                // put comb to cl_combs
+                cl_combs[count*self.k..(count+1)*self.k].iter_mut().enumerate()
+                        .for_each(|(i,x)| *x = final_comb[i] as cl_uint);
+                count += 1;
             }
             
-            final_comb[0..self.k-2].copy_from_slice(comb);
-            final_comb[self.k-2] = final_comb[self.k-3] + 1;
-            final_comb[self.k-1] = final_comb[self.k-3] + 2;
-            
-            // put comb to cl_combs
-            cl_combs[count*self.k..(count+1)*self.k].iter_mut().enumerate()
-                    .for_each(|(i,x)| *x = final_comb[i] as cl_uint);
-            
-            let has_next = comb_iter.next();
-            count += 1;
+            let has_next = has_next_1 && comb_iter.next();
             
             if !has_next || count == free_list_num {
                 println!("FXXX:");
@@ -2081,6 +2080,7 @@ impl CLNWork {
                     }
                     self.queue.finish()?;
                     // call repeatedly process_comb_l1l2_kernel
+                    let mut xcount = 0;
                     loop {
                         ExecuteKernel::new(&self.process_comb_l1l2_kernel)
                             .set_arg(&cl_task_num)
@@ -2097,9 +2097,13 @@ impl CLNWork {
                         let mut free_list_num = [cl_uint::default()];
                         self.queue.enqueue_read_buffer(&mut self.free_list_num,
                                 CL_BLOCKING, 0, &mut free_list_num[..], &[])?;
-                        if (free_list_num[0] as usize) > count / 10 {
+                        println!("FVVF1: {} {} {}", free_list_num[0], has_next, xcount);
+                        if (has_next && (free_list_num[0] as usize) > count / 10) ||
+                            (!has_next && (free_list_num[0] as usize) == count) {
+                            println!("FVVF: {} {}", free_list_num[0], has_next);
                             break;  // do load next tasks
                         }
+                        xcount += 1;
                     }
                 }
                 {
