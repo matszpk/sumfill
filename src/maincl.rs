@@ -1719,6 +1719,7 @@ pub struct CLNWork {
     init_sum_fill_diff_change_kernel: Kernel,
     process_comb_l1l2_kernel: Kernel,
     group_num: usize,
+    group_len: usize,
     task_num: usize,
     comb_task_comb_k_l1_offset: usize,
     comb_task_len: usize,
@@ -1804,6 +1805,7 @@ impl CLNWork {
            init_sum_fill_diff_change_kernel: init_kernel,
            process_comb_l1l2_kernel: process_kernel,
            group_num,
+           group_len: 64,
            comb_task_len,
            comb_task_comb_k_l1_offset,
            task_num,
@@ -1899,8 +1901,9 @@ impl CLNWork {
                             .set_arg(&self.combs)
                             .set_arg(&self.free_list)
                             .set_arg(&self.comb_tasks)
-                            .set_local_work_size(64)
-                            .set_global_work_size((((count + 63) >> 6)) << 6)
+                            .set_local_work_size(self.group_len)
+                            .set_global_work_size((((count + self.group_len - 1)
+                                    / self.group_len)) * self.group_len)
                             .enqueue_nd_range(&self.queue)?;
                     self.queue.finish()?;
                     self.queue.enqueue_read_buffer(&mut self.comb_tasks, CL_BLOCKING,
@@ -1936,7 +1939,7 @@ impl CLNWork {
     
     fn get_work_groups(&self, task_num: usize) -> usize {
         let fclen = (self.n + 31) >> 5;
-        (task_num + (64 / fclen) - 1)  / (64 / fclen)
+        (task_num + (self.group_len / fclen) - 1)  / (self.group_len / fclen)
     }
     
     fn test_calc(&mut self) -> Result<()> {
@@ -2012,8 +2015,9 @@ impl CLNWork {
                             .set_arg(&self.combs)
                             .set_arg(&self.free_list)
                             .set_arg(&self.comb_tasks)
-                            .set_local_work_size(64)
-                            .set_global_work_size((((count + 63) >> 6)) << 6)
+                            .set_local_work_size(self.group_len)
+                            .set_global_work_size((((count + self.group_len - 1)
+                                    / self.group_len)) * self.group_len)
                             .enqueue_nd_range(&self.queue)?;
                     {   // reset free_list_num
                         let free_list_num = [0 as cl_uint];
@@ -2030,8 +2034,8 @@ impl CLNWork {
                             .set_arg(&self.comb_tasks)
                             .set_arg(&self.results)
                             .set_arg(&self.result_count)
-                            .set_local_work_size(64)
-                            .set_global_work_size(self.get_work_groups(count) << 6)
+                            .set_local_work_size(self.group_len)
+                            .set_global_work_size(self.get_work_groups(count) * self.group_len)
                             .enqueue_nd_range(&self.queue)?;
                         self.queue.finish()?;
                         // get free list num
