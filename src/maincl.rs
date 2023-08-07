@@ -1971,6 +1971,41 @@ fn get_sum_numbers(k: usize, filled_l1l2_sums: &mut [usize]) {
     }
 }
 
+fn gen_l1l2_tables() {
+    for k in 5..10 {
+        let mut l1l2_sum_numbers = vec![0; k*k];
+        let mut l1l2_sumsum_pos = vec![0; k*k];
+        get_sum_numbers(k, &mut l1l2_sum_numbers);
+        for i in 1..k*k {
+            l1l2_sumsum_pos[i] += l1l2_sumsum_pos[i-1] + l1l2_sum_numbers[i-1];
+        }
+        let sumsum = l1l2_sum_numbers.iter().sum::<usize>();
+        println!("sum numbers: {}: {:?} - {}\nsumsumpos: {:?}", k, l1l2_sum_numbers,
+                sumsum, l1l2_sumsum_pos);
+        let mut l1l2_ij_table = vec![];
+        {
+            let mut p = 0;
+            for i in 0..sumsum {
+                while p+1 < l1l2_sumsum_pos.len() && i == l1l2_sumsum_pos[p] {
+                    p += 1;
+                }
+                l1l2_ij_table.push((p/k, p%k));
+            }
+        }
+        // println!("l1l2_ij_table {:?}", l1l2_ij_table.iter().map(|(i,j)|
+        //         format!("{{{},{}}}", i, j)).collect::<Vec<_>>()
+        // );
+        println!("constant uchar l1l2_ij_table[][2] = {{");
+        for ch in l1l2_ij_table.chunks(10) {
+            for (i,j) in ch {
+                print!("  {{{},{}}},", i, j);
+            }
+            println!("");
+        }
+        println!("\n}};");
+    }
+}
+
 fn main() {
     // let mut args = env::args().skip(1);
     // let n_start: usize = args.next().expect("Required n_start argument")
@@ -1984,36 +2019,4 @@ fn main() {
         let mut clnwork = CLNWork::new(0, 256, 7).unwrap();
         clnwork.test_init_kernel().unwrap();
     }
-    // for k in 5..10 {
-    //     let mut l1l2_sum_numbers = vec![0; k*k];
-    //     let mut l1l2_sumsum_pos = vec![0; k*k];
-    //     get_sum_numbers(k, &mut l1l2_sum_numbers);
-    //     for i in 1..k*k {
-    //         l1l2_sumsum_pos[i] += l1l2_sumsum_pos[i-1] + l1l2_sum_numbers[i-1];
-    //     }
-    //     let sumsum = l1l2_sum_numbers.iter().sum::<usize>();
-    //     println!("sum numbers: {}: {:?} - {}\nsumsumpos: {:?}", k, l1l2_sum_numbers,
-    //             sumsum, l1l2_sumsum_pos);
-    //     let mut l1l2_ij_table = vec![];
-    //     {
-    //         let mut p = 0;
-    //         for i in 0..sumsum {
-    //             while p+1 < l1l2_sumsum_pos.len() && i == l1l2_sumsum_pos[p] {
-    //                 p += 1;
-    //             }
-    //             l1l2_ij_table.push((p/k, p%k));
-    //         }
-    //     }
-    //     // println!("l1l2_ij_table {:?}", l1l2_ij_table.iter().map(|(i,j)|
-    //     //         format!("{{{},{}}}", i, j)).collect::<Vec<_>>()
-    //     // );
-    //     println!("constant uchar l1l2_ij_table[][2] = {{");
-    //     for ch in l1l2_ij_table.chunks(10) {
-    //         for (i,j) in ch {
-    //             print!("  {{{},{}}},", i, j);
-    //         }
-    //         println!("");
-    //     }
-    //     println!("\n}};");
-    // }
 }
