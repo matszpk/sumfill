@@ -12,6 +12,10 @@ name = "sumfill2"
 path = "src/main2.rs"
 
 [[bin]]
+name = "sumfill2_32"
+path = "src/main2_32.rs"
+
+[[bin]]
 name = "sumfillcl"
 path = "src/maincl.rs"
 
