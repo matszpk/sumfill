@@ -1635,14 +1635,14 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
         l2_filled_l2[FCLEN*i + eid] = comb_task->l2_filled_l2[FCLEN*i + eid];
     }
     // DEBUG
-    if (tid == 1000) {
+    /*if (tid == 1000) {
         for (i = 0; i < CONST_K; i++) {
             printf("L1filledL1     : %u %u : %08x\n", i, eid, l1_filled_l1[FCLEN*i + eid]);
             printf("L1filledL2Templ: %u %u : %08x\n", i, eid, l1_filled_l2_templ[FCLEN*i + eid]);
         }
         printf("CombL1L2: %u %u\n", comb_k_l1, comb_k_l2);
-    }
-    //DEBUG
+    }*/
+    // DEBUG
     comb_filled[eid] = comb_task->comb_filled[eid];
     
     uint it = 0;
@@ -1664,11 +1664,11 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
             APPLY_FILLED_LX(l1_filled_l1, comb_filled, l1_filled);
             for (i = 0; i < CONST_K; i++)
                 l2_filled_l2[i*FCLEN + eid] = l1_filled_l2_templ[i*FCLEN + eid];
-            for (i = 0; i < L1L2_TOTAL_SUMS; i += GROUP_LEN) {
-                if (i + lid < L1L2_TOTAL_SUMS) {
-                    const uint j0 = l1l2_ij_table[i+lid][0];
-                    const uint j1 = l1l2_ij_table[i+lid][1];
-                    const uint fixsum = comb_task->filled_l1l2_sums[i+lid] + FIX_SH;
+            for (i = 0; i < L1L2_TOTAL_SUMS; i += FCLEN) {
+                if (i + eid < L1L2_TOTAL_SUMS) {
+                    const uint j0 = l1l2_ij_table[i+eid][0];
+                    const uint j1 = l1l2_ij_table[i+eid][1];
+                    const uint fixsum = comb_task->filled_l1l2_sums[i+eid] + FIX_SH;
                     atomic_or(&l2_filled_l2[FCLEN*(j0*CONST_K + j1) + (fixsum >> 5)],
                                 1<<(fixsum&31));
                 }
@@ -1698,38 +1698,37 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
             comb_k_l1++;
             comb_k_l2 = comb_k_l1 + 1;
             // DEBUG
-            if (tid == 1000) {
+            /*if (tid == 1000) {
                 for (i = 0; i < CONST_K; i++) {
                     printf("PrevL1filledL1     :%u: %u %u : %08x\n",
                             comb_k_l1, i, eid, l1_filled_l1[FCLEN*i + eid]);
                     printf("PrevL1filledL2Templ:%u: %u %u : %08x\n",
                             comb_k_l1, i, eid, l1_filled_l2_templ[FCLEN*i + eid]);
                 }
-            }
+            }*/
             // DEBUG
             SHIFT_FILLED_LX(l1_filled_l1);
             uint l1l2pos = 0;
             // USE TABLE of (i,j)
-            for (i = 0; i < L1L2_TOTAL_SUMS; i += GROUP_LEN) {
-                if (i + lid < L1L2_TOTAL_SUMS) {
-                    uint sum = comb_task->filled_l1l2_sums[i+lid] +
-                        (uint)l1l2_ij_table[i+lid][0] + (uint)l1l2_ij_table[i+lid][1] + 2;
-                    if (sum >= CONST_N) {
+            for (i = 0; i < L1L2_TOTAL_SUMS; i += FCLEN) {
+                if (i + eid < L1L2_TOTAL_SUMS) {
+                    uint sum = comb_task->filled_l1l2_sums[i+eid] +
+                        (uint)l1l2_ij_table[i+eid][0] + (uint)l1l2_ij_table[i+eid][1] + 2;
+                    if (sum >= CONST_N)
                         sum -= CONST_N;
-                    }
-                    comb_task->filled_l1l2_sums[i+lid] = sum;
+                    comb_task->filled_l1l2_sums[i+eid] = sum;
                 }
             }
             SHIFT_FILLED_LX(l1_filled_l2_templ);
             // DEBUG
-            if (tid == 1000) {
+            /*if (tid == 1000) {
                 for (i = 0; i < CONST_K; i++) {
                     printf("L1filledL1     :%u: %u %u : %08x\n",
                             comb_k_l1, i, eid, l1_filled_l1[FCLEN*i + eid]);
                     printf("L1filledL2Templ:%u: %u %u : %08x\n",
                             comb_k_l1, i, eid, l1_filled_l2_templ[FCLEN*i + eid]);
                 }
-            }
+            }*/
             // DEBUG
         }
     }
