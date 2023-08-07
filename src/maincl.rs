@@ -1384,7 +1384,7 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
     if (lid < CONST_K) { \
         const uint mask = ((2<<eid)-1); \
         (FL1)[eid*FCLEN] = ((FL1)[eid*FCLEN] & ~mask) | \
-            (((FL1)[eid*FCLEN + FCLEN-1] & mask) << FIX_SH); \
+            (((FL1)[eid*FCLEN] & mask) << FIX_SH); \
     } \
 }
 
@@ -1416,7 +1416,7 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
 { \
     if (eid < CONST_K) { \
         const uint mask = ((2<<eid)-1); \
-        uint vold = (FL1)[eid*FCLEN + FCLEN-1] & mask; \
+        uint vold = (FL1)[eid*FCLEN] & mask; \
         (FL1)[eid*FCLEN] = ((FL1)[eid*FCLEN] & ~mask) | \
             (vold << FIX_SH); \
         (FL1)[eid*FCLEN + 1] |= (vold>>(32-FIX_SH)); \
