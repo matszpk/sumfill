@@ -11,6 +11,8 @@ use std::ptr;
 mod utils;
 use utils::*;
 
+// OPENCL VERSION DOESN'T WORK!!!! - bad results!!!
+
 // CPU routines
 
 // idea:
