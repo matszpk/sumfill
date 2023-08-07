@@ -1628,13 +1628,13 @@ kernel void process_comb_l1l2(uint task_num, global uint* free_list,
     local uint* l2_filled_l2 = l2_filled_l2_group + tid*FCLEN*CONST_K;
     
     uint i;
-    
     for (i = 0; i < CONST_K; i++) {
         l1_filled_l1[FCLEN*i + eid] = comb_task->filled_l1[FCLEN*i + eid];
         l1_filled_l2_templ[FCLEN*i + eid] = comb_task->filled_l2[FCLEN*i + eid];
         l2_filled_l2[FCLEN*i + eid] = comb_task->l2_filled_l2[FCLEN*i + eid];
     }
     comb_filled[eid] = comb_task->comb_filled[eid];
+    
     uint it = 0;
     uint iit = 0;
     for (it = 0; it < L1_ITER_MAX; it++) {
