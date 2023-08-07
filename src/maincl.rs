@@ -1979,6 +1979,7 @@ impl CLNWork {
         let mut comb_iter = CombineIter::new(self.k - 2, self.n - 2);
         let mut final_comb = vec![0; self.k];
         let mut count = 0;
+        let mut result_count = 0;
         let free_list_num = self.task_num;
         
         loop {
@@ -2041,6 +2042,33 @@ impl CLNWork {
                         }
                     }
                 }
+                {
+                    let mut result_count_x = [cl_ulong::default()];
+                    unsafe {
+                        self.queue.enqueue_read_buffer(&mut self.result_count,
+                                        CL_BLOCKING, 0, &mut result_count_x[..], &[])?;
+                    }
+                    // get results and print them
+                    if result_count < result_count_x[0] {
+                        let result_count_new = std::cmp::min(10000, result_count_x[0]);
+                        if result_count_new > result_count {
+                            let result_count_diff =
+                                usize::try_from(result_count_new - result_count).unwrap();
+                            let mut results = vec![0; result_count_diff*self.k];
+                            unsafe {
+                                self.queue.enqueue_read_buffer(&mut self.results,
+                                        CL_BLOCKING,
+                                        self.k*usize::try_from(result_count).unwrap()*4,
+                                        &mut results, &[])?;
+                            }
+                            for i in 0..result_count_diff {
+                                println!("Result {}: {} {:?}", self.n, self.k, 
+                                        &results[self.k*i..(self.k*(i+1))]);
+                            }
+                        }
+                    }
+                    result_count = result_count_x[0];
+                }
                 count = 0;
             }
             
@@ -2048,6 +2076,8 @@ impl CLNWork {
                 break;
             }
         }
+        
+        println!("Total results {}: {} {}", self.n, self.k, result_count);
         
         Ok(())
     }
