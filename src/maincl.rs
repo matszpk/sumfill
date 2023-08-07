@@ -1466,16 +1466,16 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
 #if (32 - FIX_SH) >= CONST_K
 
 #if CONST_K == 6
-#define SHIFT_FILLED_LX(FL1) SHIFT_FILLED_LX_6_NFX(FL1)
+#define SHIFT_FILLED_LX(FL1) SHIFT_FILLED_LX_6_NFC(FL1)
 #endif
 #if CONST_K == 7
-#define SHIFT_FILLED_LX(FL1) SHIFT_FILLED_LX_7_NFX(FL1)
+#define SHIFT_FILLED_LX(FL1) SHIFT_FILLED_LX_7_NFC(FL1)
 #endif
 #if CONST_K == 8
-#define SHIFT_FILLED_LX(FL1) SHIFT_FILLED_LX_8_NFX(FL1)
+#define SHIFT_FILLED_LX(FL1) SHIFT_FILLED_LX_8_NFC(FL1)
 #endif
 #if CONST_K == 9
-#define SHIFT_FILLED_LX(FL1) SHIFT_FILLED_LX_9_NFX(FL1)
+#define SHIFT_FILLED_LX(FL1) SHIFT_FILLED_LX_9_NFC(FL1)
 #endif
 
 #else   // if full needed
