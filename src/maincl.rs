@@ -596,9 +596,9 @@ kernel void process_comb_l2(uint task_num, global CombTask* comb_tasks,
                 uint i2;
                 global const uint* comb = comb_tasks[gid].comb;
                 for (i2 = 0; i2 < CONST_K-2; i2++)
-                    results[j*CONST_K + i2] = comb[i2];
-                results[j*CONST_K+ CONST_K-2] = l1;
-                results[j*CONST_K+ CONST_K-1] = j;
+                    results[old*CONST_K + i2] = comb[i2];
+                results[old*CONST_K + CONST_K-2] = l1;
+                results[old*CONST_K + CONST_K-1] = j;
             }
         }
         shift_filled_lx_global(l2_filled_l2);
@@ -1114,6 +1114,7 @@ impl CLNWork {
                         let result_len = usize::try_from(
                                     result_count_cl_val - cl_result_count_old).unwrap();
                         let mut cl_results = vec![0; result_len*self.k];
+                        println!("New results: {} {}", result_pos, result_len);
                         unsafe {
                             self.queue.enqueue_read_buffer(&mut self.results, CL_BLOCKING,
                                         4*result_pos*self.k, &mut cl_results[..], &[])?;
