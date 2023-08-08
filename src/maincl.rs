@@ -298,11 +298,10 @@ const PROGRAM_SOURCE: &str = r#"
 // CONST_N - n value
 // FIX_SH - (32-n)%32 (if n%32!=0 else 0)
 // FCLEN - n/32
-// WFLEN - wavefront length
+// GROUP_LEN - wavefront length
+// MAX_RESULTS - max results number
 
 #pragma OPENCL EXTENSION cl_khr_int64_base_atomics : enable
-
-#define GROUP_LEN (WFLEN)
 
 #if CONST_K < 6 || CONST_K > 9
 #error "Unsupported CONST_K"
@@ -566,18 +565,16 @@ kernel void process_comb_l1(uint task_num, uint min_iter, global CombTask* comb_
     comb_task->comb_k_l1 = CONST_N-1;
 }
 
-#define MAX_RESULT (10000)
-
 kernel void process_comb_l2(uint task_num, global CombTask* comb_tasks,
             const global CombL2Task* comb_l2_tasks,
             global uint* results, global ulong* result_count) {
     const uint gid = get_global_id(0);
     if (gid >= task_num)
         return;
-    global CombL2Task* l2_task = comb_l2_tasks + gid;
+    const global CombL2Task* l2_task = comb_l2_tasks + gid;
     global uint* l2_filled_l2 = l2_task->l2_filled_l2;
-    private l1_filled[FCLEN];
-    private l2_filled[FCLEN];
+    private uint l1_filled[FCLEN];
+    private uint l2_filled[FCLEN];
     uint j;
     for (j = 0; j < FCLEN; j++)
         l1_filled[j] = l2_task->l1_filled[j];
@@ -595,11 +592,11 @@ kernel void process_comb_l2(uint task_num, global CombTask* comb_tasks,
             val &= l2_filled[i];
         if (val == UINT_MAX) {
             ulong old = atom_inc(result_count);
-            if (old < MAX_RESULT) {
+            if (old < MAX_RESULTS) {
                 uint i2;
                 global const uint* comb = comb_tasks[gid].comb;
                 for (i2 = 0; i2 < CONST_K-2; i2++)
-                    results[j*CONST_K+ i2] = comb[i2];
+                    results[j*CONST_K + i2] = comb[i2];
                 results[j*CONST_K+ CONST_K-2] = l1;
                 results[j*CONST_K+ CONST_K-1] = j;
             }
@@ -621,6 +618,7 @@ pub struct CLNWork {
     init_sum_fill_diff_change_kernel: Kernel,
     process_comb_l1_kernel: Kernel,
     process_comb_l2_kernel: Kernel,
+    max_results: usize,
     group_num: usize,
     group_len: usize,
     task_num: usize,
@@ -642,6 +640,8 @@ impl CLNWork {
         let context = Context::from_device(&device)?;
         let queue = CommandQueue::create_default(&context, 0)?;
         
+        let max_results = 10000;
+        
         let fix_sh =  if (n & 31) != 0 {
             (u32::BITS - ((n as u32) & 31)) as usize
         } else {
@@ -654,8 +654,9 @@ impl CLNWork {
         
         let fclen = (n + 31) >> 5;
         let prog_opts = format!(
-                "-DCONST_N=({}) -DCONST_K=({}) -DFIX_SH=({}) -DFCLEN=({}) -DWFLEN=({})",
-                n, k, fix_sh, fclen, group_len);
+                concat!("-DCONST_N=({}) -DCONST_K=({}) -DFIX_SH=({}) -DFCLEN=({}) ",
+                        "-DGROUP_LEN=({}) -DMAX_RESULTS=({})"),
+                n, k, fix_sh, fclen, group_len, max_results);
         let program = match Program::create_and_build_from_source(&context, PROGRAM_SOURCE,
                 &prog_opts) {
             Ok(program) => program,
@@ -696,7 +697,7 @@ impl CLNWork {
         };
         let results = unsafe {
             Buffer::<cl_uint>::create(&context, CL_MEM_READ_WRITE,
-                            k * 10000, ptr::null_mut())?
+                            k * max_results, ptr::null_mut())?
         };
         let result_count = unsafe {
             Buffer::<cl_ulong>::create(&context, CL_MEM_READ_WRITE, 1, ptr::null_mut())?
@@ -716,6 +717,7 @@ impl CLNWork {
            group_len,
            comb_task_len,
            comb_l2_task_len,
+           max_results,
            task_num,
            combs,
            comb_tasks,
