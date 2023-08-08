@@ -15,168 +15,7 @@ use utils::*;
 
 // CPU routines
 
-// idea:
-// comb_filled - filled for sums without k-2 and k-1 elements
-// filled_l1 - filled for sums with k-2 elements
-// filled_l2 - filled for sums with k-1 elements
-fn init_sum_fill_diff_change(n: usize, comb: &[usize], comb_filled: &mut [u64],
-            filled_l1: &mut [u64], filled_l1l2_sums: &mut [Vec<usize>], filled_l2: &mut [u64]) {
-    let k = comb.len();
-    comb_filled.fill(0);
-    filled_l1.fill(0);
-    filled_l2.fill(0);
-    filled_l1l2_sums.iter_mut().for_each(|sums| sums.clear());
-    let filled_clen = comb_filled.len();
-    let mut numr_iter = CombineWithRepIter::new(k, k);
-    let fix_sh =  if (n & 63) != 0 {
-        (u64::BITS - ((n as u32) & 63)) as usize
-    } else {
-        0
-    };
-    loop {
-        let numc = numr_iter.get();
-        //let sum = numc.iter().map(|x| comb[*x]).sum::<usize>() % n;
-        let sum = numc.iter().map(|x| comb[*x]).fold(0, |a, x| {
-            let a = a + x;
-            if a >= n {
-                a - n
-            } else {
-                a
-            }
-        });
-        
-        let fixsum = fix_sh + sum;
-        let mut l1count = 0;
-        let mut l2count = 0;
-        for c in numc {
-            if *c == k - 2 {
-                l1count += 1;
-            } else if *c == k - 1 {
-                l2count += 1;
-            }
-        }
-        if l1count == 0 && l2count == 0 {
-            comb_filled[fixsum >> 6] |= 1u64 << (fixsum & 63);
-        } else {
-            if l1count != 0 {
-                if l2count == 0 {
-                    filled_l1[filled_clen*(l1count-1) + (fixsum >> 6)] |= 1u64 << (fixsum & 63);
-                } else {
-                    filled_l1l2_sums[k*(l1count-1) + (l2count-1)].push(sum);
-                }
-            } else if l2count != 0 {
-                filled_l2[filled_clen*(l2count-1) + (fixsum >> 6)] |= 1u64 << (fixsum & 63);
-            }
-        }
-        if !numr_iter.next() {
-            break;
-        }
-    }
-}
-
-fn shift_filled_lx(len: usize, k: usize, filled_l1: &mut [u64], fix_sh: usize) {
-    for i in 0..k {
-        let filled = &mut filled_l1[len*i..len*(i+1)];
-        let shift = i+1;
-        let mut vprev = filled[len-1];
-        for j in 0..len {
-            let vcur = filled[j];
-            filled[j] = (vcur << shift) | (vprev >> (64-shift));
-            vprev = vcur;
-        }
-        if fix_sh != 0 {
-            let mask = (1u64 << shift) - 1;
-            // fix first bits
-            let vold = filled[0] & mask;
-            filled[0] = (filled[0] & !mask) | (vold << fix_sh);
-            if (64 - fix_sh) < shift {
-                filled[1] |= vold >> (64-fix_sh);
-            }
-        }
-    }
-}
-
-fn apply_filled_lx(len: usize, k: usize, filled_l1: &[u64], comb_filled: &[u64],
-                    out_filled: &mut [u64]) {
-    out_filled.copy_from_slice(comb_filled);
-    for i in 0..k {
-        let filled = &filled_l1[len*i..len*(i+1)];
-        for j in 0..len {
-            out_filled[j] |= filled[j];
-        }
-    }
-}
-
-#[inline]
-fn check_all_filled(filled: &[u64], fix_sh: usize) -> bool {
-    if fix_sh != 0 {
-        filled[0] == (!((1u64 << fix_sh) - 1)) &&
-            filled[1..].iter().all(|x| *x == u64::MAX)
-    } else {
-        filled.iter().all(|x| *x == u64::MAX)
-    }
-}
-
-fn process_comb_l1l2(n: usize, k: usize, start: usize, comb_filled: &[u64],
-        filled_l1: &[u64], filled_l1l2_sums: &[Vec<usize>], filled_l2: &[u64],
-        mut found_call: impl FnMut(usize, usize)) {
-    let filled_clen = comb_filled.len();
-    let fix_sh =  if (n & 63) != 0 {
-        (u64::BITS - ((n as u32) & 63)) as usize
-    } else {
-        0
-    };
-    let mut l1_filled = vec![0; comb_filled.len()];
-    let mut l2_filled = vec![0; comb_filled.len()];
-    let mut l1_filled_l1 = Vec::from(filled_l1);
-    let mut l1_filled_l1l2_sums = Vec::from(filled_l1l2_sums);
-    let mut l1_filled_l2_templ = Vec::from(filled_l2);
-    let mut l2_filled_l2 = l1_filled_l2_templ.clone();
-    for i in start..n-1 {
-        apply_filled_lx(filled_clen, k, &l1_filled_l1, &comb_filled, &mut l1_filled);
-        l2_filled_l2.copy_from_slice(&l1_filled_l2_templ);
-        for j0 in 0..k {
-            for j1 in 0..(k-j0) {
-                for sum in &l1_filled_l1l2_sums[j0*k + j1] {
-                    let fixsum = sum + fix_sh;
-                    l2_filled_l2[filled_clen*j1 + (fixsum >> 6)] |= 1u64 << (fixsum & 63);
-                }
-            }
-        }
-        // apply to comb_filled
-        for j in i+1..n {
-            apply_filled_lx(filled_clen, k, &l2_filled_l2, &l1_filled, &mut l2_filled);
-            if check_all_filled(&l2_filled, fix_sh) {
-                found_call(i, j);
-            }
-            shift_filled_lx(filled_clen, k, &mut l2_filled_l2, fix_sh);
-        }
-        // shift l1
-        shift_filled_lx(filled_clen, k, &mut l1_filled_l1, fix_sh);
-        for j0 in 0..k {
-            for j1 in 0..(k-j0) {
-                l1_filled_l1l2_sums[j0*k + j1].iter_mut().for_each(|sum| {
-                    *sum = modulo_add(*sum, j0+j1+2, n);
-                });
-            }
-        }
-        shift_filled_lx(filled_clen, k, &mut l1_filled_l2_templ, fix_sh);
-    }
-}
-
-#[inline]
-fn modulo_add(a: usize, b: usize, n: usize) -> usize {
-    let c = a + b;
-    if c < n {
-        c
-    } else {
-        c - n
-    }
-}
-
-// for 32-bit only testing
-
-fn init_sum_fill_diff_change_32(n: usize, comb: &[usize], comb_filled: &mut [u32],
+fn init_sum_fill_diff_change(n: usize, comb: &[usize], comb_filled: &mut [u32],
             filled_l1: &mut [u32], filled_l1l2_sums: &mut [Vec<usize>], filled_l2: &mut [u32]) {
     let k = comb.len();
     comb_filled.fill(0);
@@ -231,6 +70,222 @@ fn init_sum_fill_diff_change_32(n: usize, comb: &[usize], comb_filled: &mut [u32
     }
 }
 
+fn shift_filled_lx(len: usize, k: usize, filled_l1: &mut [u32], fix_sh: usize) {
+    for i in 0..k {
+        let filled = &mut filled_l1[len*i..len*(i+1)];
+        let shift = i+1;
+        let mut vprev = filled[len-1];
+        for j in 0..len {
+            let vcur = filled[j];
+            filled[j] = (vcur << shift) | (vprev >> (32-shift));
+            vprev = vcur;
+        }
+        if fix_sh != 0 {
+            let mask = (1u32 << shift) - 1;
+            // fix first bits
+            let vold = filled[0] & mask;
+            filled[0] = (filled[0] & !mask) | (vold << fix_sh);
+            if (32 - fix_sh) < shift {
+                filled[1] |= vold >> (32-fix_sh);
+            }
+        }
+    }
+}
+
+fn apply_filled_lx(len: usize, k: usize, filled_l1: &[u32], comb_filled: &[u32],
+                    out_filled: &mut [u32]) {
+    out_filled.copy_from_slice(comb_filled);
+    for i in 0..k {
+        let filled = &filled_l1[len*i..len*(i+1)];
+        for j in 0..len {
+            out_filled[j] |= filled[j];
+        }
+    }
+}
+
+#[inline]
+fn check_all_filled(filled: &[u32], fix_sh: usize) -> bool {
+    if fix_sh != 0 {
+        filled[0] == (!((1u32 << fix_sh) - 1)) &&
+            filled[1..].iter().all(|x| *x == u32::MAX)
+    } else {
+        filled.iter().all(|x| *x == u32::MAX)
+    }
+}
+
+fn process_comb_l1l2(n: usize, k: usize, start: usize, comb_filled: &[u32],
+        filled_l1: &[u32], filled_l1l2_sums: &[Vec<usize>], filled_l2: &[u32],
+        mut found_call: impl FnMut(usize, usize)) {
+    let filled_clen = comb_filled.len();
+    let fix_sh =  if (n & 31) != 0 {
+        (u32::BITS - ((n as u32) & 31)) as usize
+    } else {
+        0
+    };
+    let mut l1_filled = vec![0; comb_filled.len()];
+    let mut l2_filled = vec![0; comb_filled.len()];
+    let mut l1_filled_l1 = Vec::from(filled_l1);
+    let mut l1_filled_l1l2_sums = Vec::from(filled_l1l2_sums);
+    let mut l1_filled_l2_templ = Vec::from(filled_l2);
+    let mut l2_filled_l2 = l1_filled_l2_templ.clone();
+    for i in start..n-1 {
+        apply_filled_lx(filled_clen, k, &l1_filled_l1, &comb_filled, &mut l1_filled);
+        l2_filled_l2.copy_from_slice(&l1_filled_l2_templ);
+        for j0 in 0..k {
+            for j1 in 0..(k-j0) {
+                for sum in &l1_filled_l1l2_sums[j0*k + j1] {
+                    let fixsum = sum + fix_sh;
+                    l2_filled_l2[filled_clen*j1 + (fixsum >> 5)] |= 1u32 << (fixsum & 31);
+                }
+            }
+        }
+        // apply to comb_filled
+        for j in i+1..n {
+            apply_filled_lx(filled_clen, k, &l2_filled_l2, &l1_filled, &mut l2_filled);
+            if check_all_filled(&l2_filled, fix_sh) {
+                found_call(i, j);
+            }
+            shift_filled_lx(filled_clen, k, &mut l2_filled_l2, fix_sh);
+        }
+        // shift l1
+        shift_filled_lx(filled_clen, k, &mut l1_filled_l1, fix_sh);
+        for j0 in 0..k {
+            for j1 in 0..(k-j0) {
+                l1_filled_l1l2_sums[j0*k + j1].iter_mut().for_each(|sum| {
+                    *sum = modulo_add(*sum, j0+j1+2, n);
+                });
+            }
+        }
+        shift_filled_lx(filled_clen, k, &mut l1_filled_l2_templ, fix_sh);
+    }
+}
+
+#[inline]
+fn modulo_add(a: usize, b: usize, n: usize) -> usize {
+    let c = a + b;
+    if c < n {
+        c
+    } else {
+        c - n
+    }
+}
+
+#[derive(Clone)]
+struct CombL2Task {
+    l2_filled_l2: Vec<u32>,
+    l1_filled: Vec<u32>,
+    l1: usize,
+}
+
+impl CombL2Task {
+    fn process_comb_l2(&self, n: usize, k: usize, mut found_call: impl FnMut(usize, usize)) {
+        let filled_clen = self.l1_filled.len();
+        let mut l2_filled_l2 = self.l2_filled_l2.clone();
+        let l1_filled = self.l1_filled.clone();
+        let mut l2_filled = vec![0; filled_clen];
+        let fix_sh =  if (n & 31) != 0 {
+            (u32::BITS - ((n as u32) & 31)) as usize
+        } else {
+            0
+        };
+        for j in self.l1+1..n {
+            apply_filled_lx(filled_clen, k, &l2_filled_l2, &l1_filled, &mut l2_filled);
+            if check_all_filled(&l2_filled, fix_sh) {
+                found_call(self.l1, j);
+            }
+            shift_filled_lx(filled_clen, k, &mut l2_filled_l2, fix_sh);
+        }
+    }
+}
+
+#[derive(Clone)]
+struct CombTask {
+    n: usize,
+    comb: Vec<usize>,
+    comb_filled: Vec<u32>,
+    filled_l1: Vec<u32>,
+    filled_l1l2_sums: Vec<Vec<usize>>,
+    filled_l2: Vec<u32>,
+    l1: usize,
+}
+
+impl CombTask {
+    fn new(n: usize, comb: &[usize]) -> Self {
+        let filled_clen = (n + 31) >> 5;
+        let k = comb.len();
+        let mut comb_filled = vec![0u32; filled_clen];
+        let mut filled_l1 = vec![0u32; filled_clen*k];
+        let mut filled_l1l2_sums = vec![vec![]; k*k];
+        let mut filled_l2 = vec![0u32; filled_clen*k];
+        init_sum_fill_diff_change(n, comb, &mut comb_filled, &mut filled_l1,
+                                  &mut filled_l1l2_sums, &mut filled_l2);
+        Self {
+            n,
+            comb: Vec::from(comb),
+            comb_filled,
+            filled_l1,
+            filled_l1l2_sums,
+            filled_l2,
+            l1: comb[comb.len()-2],
+        }
+    }
+    
+    fn process_comb_l1(&mut self, min_iter: usize, l2_tasks: &mut Vec<CombL2Task>) {
+        let n = self.n;
+        let k = self.comb.len();
+        let start = self.l1;
+        
+        if min_iter > n-(start+1) {
+            return;
+        }
+        
+        let filled_clen = self.comb_filled.len();
+        let fix_sh =  if (n & 31) != 0 {
+            (u32::BITS - ((n as u32) & 31)) as usize
+        } else {
+            0
+        };
+        let mut l1_filled = vec![0; self.comb_filled.len()];
+        let mut l2_filled = vec![0; self.comb_filled.len()];
+        let l1_filled_l1 = &mut self.filled_l1;
+        let l1_filled_l1l2_sums = &mut self.filled_l1l2_sums;
+        let l1_filled_l2_templ = &mut self.filled_l2;
+        let mut l2_filled_l2 = l1_filled_l2_templ.clone();
+        
+        for i in start..n-1 {
+            if min_iter > n-(i+1) {
+                self.l1 = i;
+                return;
+            }    
+            
+            apply_filled_lx(filled_clen, k, l1_filled_l1, &self.comb_filled, &mut l1_filled);
+            l2_filled_l2.copy_from_slice(l1_filled_l2_templ);
+            for j0 in 0..k {
+                for j1 in 0..(k-j0) {
+                    for sum in &l1_filled_l1l2_sums[j0*k + j1] {
+                        let fixsum = sum + fix_sh;
+                        l2_filled_l2[filled_clen*j1 + (fixsum >> 5)] |= 1u32 << (fixsum & 31);
+                    }
+                }
+            }
+            // put new L2 task
+            l2_tasks.push(CombL2Task{ l2_filled_l2: l2_filled_l2.clone(),
+                                l1_filled: l1_filled.clone(), l1: i });
+            // shift l1
+            shift_filled_lx(filled_clen, k, l1_filled_l1, fix_sh);
+            for j0 in 0..k {
+                for j1 in 0..(k-j0) {
+                    l1_filled_l1l2_sums[j0*k + j1].iter_mut().for_each(|sum| {
+                        *sum = modulo_add(*sum, j0+j1+2, n);
+                    });
+                }
+            }
+            shift_filled_lx(filled_clen, k, l1_filled_l2_templ, fix_sh);
+        }
+        self.l1 = n-1;
+    }
+}
+
 // CPU routines - end
 
 const PROGRAM_SOURCE: &str = r#"
@@ -248,9 +303,9 @@ const PROGRAM_SOURCE: &str = r#"
 #error "Unsupported CONST_K"
 #endif
 
-#if CONST_N < 161
-#error "Unsupported CONST_N"
-#endif
+// #if CONST_N < 161
+// #error "Unsupported CONST_N"
+// #endif
 
 #if CONST_K == 6
 #define L1L2_TOTAL_SUMS (126)
@@ -1968,7 +2023,7 @@ impl CLNWork {
             final_comb[self.k-2] = final_comb[self.k-3] + 1;
             final_comb[self.k-1] = final_comb[self.k-3] + 2;
             
-            init_sum_fill_diff_change_32(self.n, &final_comb, &mut comb_filled,
+            init_sum_fill_diff_change(self.n, &final_comb, &mut comb_filled,
                             &mut filled_l1, &mut filled_l1l2_sums, &mut filled_l2);
             
             {
@@ -2010,6 +2065,7 @@ impl CLNWork {
                                 0, &cl_combs, &[])?;
                     let cl_task_num = count as cl_uint;
                     println!("NDrange: {} {}", count, self.task_num);
+                    // call init_kernel
                     ExecuteKernel::new(&self.init_sum_fill_diff_change_kernel)
                             .set_arg(&cl_task_num)
                             .set_arg(&self.combs)
@@ -2035,7 +2091,6 @@ impl CLNWork {
                         // }
                     }
                 }
-                // call init_kernel
                 count = 0;
                 println!("CCX: {:?}", final_comb);
             }
@@ -2056,7 +2111,68 @@ impl CLNWork {
         (task_num + (self.group_len / fclen) - 1)  / (self.group_len / fclen)
     }
     
-    fn test_calc(&mut self) -> Result<()> {
+    fn test_calc(&mut self) {
+        let filled_clen = (self.n + 31) >> 5;
+        let mut count = 0;
+        
+        let mut comb_iter = CombineIter::new(self.k - 2, self.n - 2);
+        let mut final_comb = vec![0; self.k];
+        
+        let task_num = 2048;
+        let mut l1_tasks: Vec<CombTask> = vec![];
+        
+        const L2_LEN_STEP_SIZE: usize = 32;
+        let mut result_count = 0u64;
+        
+        println!("TestCalc");
+        // compare results
+        loop {
+            let comb = comb_iter.get();
+            
+            let has_next_1 = comb[0] == 0 && comb.get(1).copied().unwrap_or(1) == 1;
+            
+            if has_next_1 {
+                final_comb[0..self.k-2].copy_from_slice(comb);
+                final_comb[self.k-2] = final_comb[self.k-3] + 1;
+                final_comb[self.k-1] = final_comb[self.k-3] + 2;
+            }
+            
+            // init_sum_fill_diff_change(self.n, &final_comb, &mut comb_filled,
+            //                 &mut filled_l1, &mut filled_l1l2_sums, &mut filled_l2);
+            if has_next_1 {
+                l1_tasks.push(CombTask::new(self.n, &final_comb));
+            }
+            
+            let has_next = has_next_1 && comb_iter.next();
+            
+            count += 1;
+            if !has_next || count == task_num {
+                let max_step_num = (self.n + L2_LEN_STEP_SIZE - 1) / L2_LEN_STEP_SIZE;
+                for i in (0..max_step_num).rev() {
+                    println!("Cyyy: {}", i*L2_LEN_STEP_SIZE);
+                    let mut l2_tasks: Vec<CombL2Task> = vec![];
+                    for l1_task in &mut l1_tasks {
+                        l1_task.process_comb_l1(i*L2_LEN_STEP_SIZE, &mut l2_tasks);
+                    }
+                    // process l2 tasks
+                    for l2_task in l2_tasks {
+                        l2_task.process_comb_l2(self.n, self.k, |i, j| {
+                            result_count += 1;
+                        });
+                    }
+                }
+                count = 0;
+                println!("CCX: {:?}", final_comb);
+            }
+            
+            if !has_next {
+                break;
+            }
+        }
+        println!("Total results: {}", result_count);
+    }
+    
+    fn test_calc_cl(&mut self) -> Result<()> {
         let filled_clen = (self.n + 31) >> 5;
         let mut count = 0;
         let mut exp_cl_comb_tasks: Vec<cl_uint> = vec![0; self.comb_task_len*self.task_num];
@@ -2292,9 +2408,9 @@ fn main() {
     //     //calc_min_sumn_to_fill_par_all_opencl(i);
     // }
     {
-        let mut clnwork = CLNWork::new(0, 320, 7).unwrap();
+        let mut clnwork = CLNWork::new(0, 100, 6).unwrap();
         //clnwork.test_init_kernel().unwrap();
-        clnwork.test_calc().unwrap();
+        clnwork.test_calc();
     }
     // gen_l1l2_tables();
 }
