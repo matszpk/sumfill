@@ -7,9 +7,13 @@ use opencl3::memory::{Buffer, CL_MEM_READ_ONLY, CL_MEM_READ_WRITE, CL_MEM_WRITE_
 use opencl3::program::Program;
 use opencl3::types::{cl_event, cl_uint, cl_ulong, CL_BLOCKING, CL_NON_BLOCKING};
 use opencl3::Result;
+use rayon::prelude::*;
+use std::sync::{atomic::{self, AtomicU64}, Arc};
 use std::ptr;
 mod utils;
 use utils::*;
+
+const L2_LEN_STEP_SIZE: usize = 32;
 
 // OPENCL VERSION DOESN'T WORK!!!! - bad results!!!
 
@@ -462,10 +466,12 @@ pub struct CLNWork {
     group_num: usize,
     group_len: usize,
     task_num: usize,
-    comb_task_comb_k_l1_offset: usize,
     comb_task_len: usize,
+    comb_l2_task_len: usize,
     combs: Buffer<cl_uint>,
     comb_tasks: Buffer<cl_uint>,
+    comb_l2_tasks: Buffer<cl_uint>,
+    comb_l2_tasks_num: Buffer<cl_uint>,
     results: Buffer<cl_uint>,
     result_count: Buffer<cl_ulong>,
 }
@@ -484,8 +490,9 @@ impl CLNWork {
             0
         };
         
-        let group_len = device. max_work_group_size()?;
-        let group_num = 2 * device.max_compute_units()?;
+        let group_len = usize::try_from(device.max_work_group_size()? >> 2).unwrap();
+        let group_num = usize::try_from(8 * device.max_compute_units()?).unwrap();
+        println!("CLNWork: GroupLen: {}, GroupNum: {}", group_len, group_num);
         
         let fclen = (n + 31) >> 5;
         let prog_opts = format!(
@@ -501,7 +508,6 @@ impl CLNWork {
         let init_kernel = Kernel::create(&program, "init_sum_fill_diff_change")?;
         let process_kernel = Kernel::create(&program, "init_sum_fill_diff_change")?;
         
-        let group_num = 10240;
         let l1l2_total_sums = match k {
             5 => 32,
             6 => 126,
@@ -511,8 +517,8 @@ impl CLNWork {
             _ => { panic!("Unsupported k"); }
         };
         let comb_task_len = (k-2) + fclen + k*fclen*2 + l1l2_total_sums + 1;
-        let comb_task_comb_k_l1_offset = comb_task_len - 2;
-        let task_num = (64 / fclen) * (group_num + fclen-1);
+        let comb_l2_task_len = k*fclen + fclen + 1;
+        let task_num = group_len * group_num;
         
         let combs = unsafe {
             Buffer::<cl_uint>::create(&context, CL_MEM_READ_WRITE,
@@ -521,6 +527,13 @@ impl CLNWork {
         let comb_tasks = unsafe {
             Buffer::<cl_uint>::create(&context, CL_MEM_READ_WRITE,
                     comb_task_len * task_num, ptr::null_mut())?
+        };
+        let comb_l2_tasks = unsafe {
+            Buffer::<cl_uint>::create(&context, CL_MEM_READ_WRITE,
+                    comb_l2_task_len * task_num * L2_LEN_STEP_SIZE, ptr::null_mut())?
+        };
+        let comb_l2_tasks_num = unsafe {
+            Buffer::<cl_uint>::create(&context, CL_MEM_READ_WRITE, 1, ptr::null_mut())?
         };
         let results = unsafe {
             Buffer::<cl_uint>::create(&context, CL_MEM_READ_WRITE,
@@ -542,10 +555,12 @@ impl CLNWork {
            group_num,
            group_len,
            comb_task_len,
-           comb_task_comb_k_l1_offset,
+           comb_l2_task_len,
            task_num,
            combs,
            comb_tasks,
+           comb_l2_tasks,
+           comb_l2_tasks_num,
            results,
            result_count
         })
@@ -675,8 +690,7 @@ impl CLNWork {
         let task_num = 2048;
         let mut l1_tasks: Vec<CombTask> = vec![];
         
-        const L2_LEN_STEP_SIZE: usize = 32;
-        let mut result_count = 0u64;
+        let result_count = Arc::new(AtomicU64::new(0u64));
         
         println!("TestCalc");
         // compare results
@@ -709,12 +723,18 @@ impl CLNWork {
                         l1_task.process_comb_l1(i*L2_LEN_STEP_SIZE, &mut l2_tasks);
                     }
                     // process l2 tasks
-                    for l2_task in l2_tasks {
+                    // for l2_task in l2_tasks {
+                    //     l2_task.process_comb_l2(self.n, self.k, |i, j| {
+                    //         result_count += 1;
+                    //     });
+                    // }
+                    l2_tasks.into_par_iter().for_each(|l2_task| {
                         l2_task.process_comb_l2(self.n, self.k, |i, j| {
-                            result_count += 1;
+                            result_count.fetch_add(1, atomic::Ordering::SeqCst);
                         });
-                    }
+                    });
                 }
+                l1_tasks.clear();
                 count = 0;
                 println!("CCX: {:?}", final_comb);
             }
@@ -723,7 +743,7 @@ impl CLNWork {
                 break;
             }
         }
-        println!("Total results: {}", result_count);
+        println!("Total results: {}", result_count.load(atomic::Ordering::SeqCst));
     }
 }
 
@@ -808,9 +828,9 @@ fn main() {
     //     //calc_min_sumn_to_fill_par_all_opencl(i);
     // }
     {
-        let mut clnwork = CLNWork::new(0, 277, 7).unwrap();
-        clnwork.test_init_kernel().unwrap();
-        //clnwork.test_calc();
+        let mut clnwork = CLNWork::new(0, 300, 7).unwrap();
+        //clnwork.test_init_kernel().unwrap();
+        clnwork.test_calc();
     }
     // gen_l1l2_tables();
 }
