@@ -927,6 +927,8 @@ impl CLNWork {
             }
         }
         
+        let cl_result_count_old = 0;
+        
         // compare results
         loop {
             let comb = comb_iter.get();
@@ -1103,6 +1105,23 @@ impl CLNWork {
                     }
                     assert_eq!(result_count.load(atomic::Ordering::SeqCst),
                             result_count_cl[0]);
+                    let result_count_cl_val = result_count_cl[0];
+                    if (result_count_cl_val > cl_result_count_old &&
+                            cl_result_count_old < u64::try_from(self.max_results).unwrap()) {
+                        let result_pos = usize::try_from(cl_result_count_old).unwrap();
+                        let result_count_cl_val = std::cmp::min(result_count_cl_val,
+                                    self.max_results as u64);
+                        let result_len = usize::try_from(
+                                    result_count_cl_val - cl_result_count_old).unwrap();
+                        let mut cl_results = vec![0; result_len*self.k];
+                        unsafe {
+                            self.queue.enqueue_read_buffer(&mut self.results, CL_BLOCKING,
+                                        4*result_pos*self.k, &mut cl_results[..], &[])?;
+                        }
+                        for ch in cl_results.chunks(self.k) {
+                            println!("Result {}: {} {:?}", self.n, self.k, ch);
+                        }
+                    }
                     // TESTING!
                 }
                 
