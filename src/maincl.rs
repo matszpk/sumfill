@@ -585,7 +585,7 @@ kernel void process_comb_l2(uint task_num, global CombTask* comb_tasks,
     uint l1 = l2_task->l1;
     for (j = l1 + 1; j < CONST_N; j++) {
         apply_filled_lx_global(l2_filled_l2, l1_filled, l2_filled);
-        uint val = 0;
+        uint val = UINT_MAX;
         uint i = 0;
         if (FIX_SH != 0) {
             i = 1;
