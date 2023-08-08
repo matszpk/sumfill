@@ -174,8 +174,9 @@ fn modulo_add(a: usize, b: usize, n: usize) -> usize {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct CombL2Task {
+    l1_task_id: usize,
     l2_filled_l2: Vec<u32>,
     l1_filled: Vec<u32>,
     l1: usize,
@@ -234,7 +235,8 @@ impl CombTask {
         }
     }
     
-    fn process_comb_l1(&mut self, min_iter: usize, l2_tasks: &mut Vec<CombL2Task>) {
+    fn process_comb_l1(&mut self, task_id: usize, min_iter: usize,
+                       l2_tasks: &mut Vec<CombL2Task>) {
         let n = self.n;
         let k = self.comb.len();
         let start = self.l1;
@@ -272,7 +274,7 @@ impl CombTask {
                 }
             }
             // put new L2 task
-            l2_tasks.push(CombL2Task{ l2_filled_l2: l2_filled_l2.clone(),
+            l2_tasks.push(CombL2Task{ l1_task_id: task_id, l2_filled_l2: l2_filled_l2.clone(),
                                 l1_filled: l1_filled.clone(), l1: i });
             // shift l1
             shift_filled_lx(filled_clen, k, l1_filled_l1, fix_sh);
@@ -617,7 +619,8 @@ pub struct CLNWork {
     queue: CommandQueue,
     program: Program,
     init_sum_fill_diff_change_kernel: Kernel,
-    process_comb_l1l2_kernel: Kernel,
+    process_comb_l1_kernel: Kernel,
+    process_comb_l2_kernel: Kernel,
     group_num: usize,
     group_len: usize,
     task_num: usize,
@@ -661,7 +664,8 @@ impl CLNWork {
             }
         };
         let init_kernel = Kernel::create(&program, "init_sum_fill_diff_change")?;
-        let process_kernel = Kernel::create(&program, "init_sum_fill_diff_change")?;
+        let process_comb_l1_kernel = Kernel::create(&program, "process_comb_l1")?;
+        let process_comb_l2_kernel = Kernel::create(&program, "process_comb_l2")?;
         
         let l1l2_total_sums = match k {
             5 => 32,
@@ -672,7 +676,7 @@ impl CLNWork {
             _ => { panic!("Unsupported k"); }
         };
         let comb_task_len = (k-2) + fclen + k*fclen*2 + l1l2_total_sums + 1;
-        let comb_l2_task_len = k*fclen + fclen + 1;
+        let comb_l2_task_len = 1 + k*fclen + fclen + 1;
         let task_num = group_len * group_num;
         
         let combs = unsafe {
@@ -706,7 +710,8 @@ impl CLNWork {
            queue,
            program,
            init_sum_fill_diff_change_kernel: init_kernel,
-           process_comb_l1l2_kernel: process_kernel,
+           process_comb_l1_kernel,
+           process_comb_l2_kernel,
            group_num,
            group_len,
            comb_task_len,
@@ -830,11 +835,6 @@ impl CLNWork {
         Ok(())
     }
     
-    fn get_work_groups(&self, task_num: usize) -> usize {
-        let fclen = (self.n + 31) >> 5;
-        (task_num + (self.group_len / fclen) - 1)  / (self.group_len / fclen)
-    }
-    
     fn test_calc(&mut self) {
         let filled_clen = (self.n + 31) >> 5;
         let mut count = 0;
@@ -874,8 +874,8 @@ impl CLNWork {
                 for i in (0..max_step_num).rev() {
                     println!("Cyyy: {}", i*L2_LEN_STEP_SIZE);
                     let mut l2_tasks: Vec<CombL2Task> = vec![];
-                    for l1_task in &mut l1_tasks {
-                        l1_task.process_comb_l1(i*L2_LEN_STEP_SIZE, &mut l2_tasks);
+                    for (id, l1_task) in l1_tasks.iter_mut().enumerate() {
+                        l1_task.process_comb_l1(id, i*L2_LEN_STEP_SIZE, &mut l2_tasks);
                     }
                     // process l2 tasks
                     // for l2_task in l2_tasks {
@@ -899,6 +899,171 @@ impl CLNWork {
             }
         }
         println!("Total results: {}", result_count.load(atomic::Ordering::SeqCst));
+    }
+    
+    fn test_calc_cl(&mut self) -> Result<()> {
+        let filled_clen = (self.n + 31) >> 5;
+        let mut count = 0;
+        
+        let mut comb_iter = CombineIter::new(self.k - 2, self.n - 2);
+        let mut final_comb = vec![0; self.k];
+        
+        let task_num = self.task_num;
+        let mut l1_tasks: Vec<CombTask> = vec![];
+        let mut cl_combs = vec![];
+        let mut cl_comb_tasks: Vec<cl_uint> = vec![0; self.comb_task_len*self.task_num];
+        let mut exp_cl_comb_tasks: Vec<cl_uint> = vec![0; self.comb_task_len*self.task_num];
+        
+        let result_count = Arc::new(AtomicU64::new(0u64));
+        
+        println!("TestCalc CL");
+        {
+            let result_count_cl = [0];
+            unsafe {
+                self.queue.enqueue_write_buffer(&mut self.result_count, CL_BLOCKING,
+                                0, &result_count_cl[..], &[])?;
+            }
+        }
+        
+        // compare results
+        loop {
+            let comb = comb_iter.get();
+            
+            let has_next_1 = comb[0] == 0 && comb.get(1).copied().unwrap_or(1) == 1;
+            
+            if has_next_1 {
+                final_comb[0..self.k-2].copy_from_slice(comb);
+                final_comb[self.k-2] = final_comb[self.k-3] + 1;
+                final_comb[self.k-1] = final_comb[self.k-3] + 2;
+            }
+            
+            // init_sum_fill_diff_change(self.n, &final_comb, &mut comb_filled,
+            //                 &mut filled_l1, &mut filled_l1l2_sums, &mut filled_l2);
+            if has_next_1 {
+                l1_tasks.push(CombTask::new(self.n, &final_comb));
+                cl_combs.extend(final_comb.iter().map(|x| u32::try_from(*x).unwrap()));
+                
+                {
+                    let comb_task = &l1_tasks[count];
+                    // put to expected cl comb_task
+                    let mut exp_comb_task = &mut exp_cl_comb_tasks[
+                            self.comb_task_len*count..self.comb_task_len*(count+1)];
+                    // copy comb
+                    comb_task.comb.iter().take(self.k-2).enumerate().for_each(|(i, x)|
+                        exp_comb_task[i] = *x as cl_uint);
+                    // copy comb_filled
+                    comb_task.comb_filled.iter().enumerate().for_each(|(i, x)|
+                        exp_comb_task[(self.k-2) + i] = *x as cl_uint);
+                    // copy filled_l1
+                    comb_task.filled_l1.iter().enumerate().for_each(|(i, x)|
+                        exp_comb_task[(self.k-2) + filled_clen + i] = *x as cl_uint);
+                    // copy filled_l1l2_sum
+                    let mut idx = (self.k-2) + filled_clen + filled_clen*self.k;
+                    for j in 0..self.k*self.k {
+                        comb_task.filled_l1l2_sums[j].iter().enumerate().for_each(|(i,x)|
+                            exp_comb_task[idx + i] = *x as cl_uint);
+                        idx += comb_task.filled_l1l2_sums[j].len();
+                    }
+                    // copy filled_l2
+                    comb_task.filled_l2.iter().enumerate().for_each(|(i, x)|
+                        exp_comb_task[idx + i] = *x as cl_uint);
+                    exp_comb_task[exp_comb_task.len() - 1] = final_comb[self.k-2] as cl_uint;
+                }
+            }
+            
+            let has_next = has_next_1 && comb_iter.next();
+            
+            count += 1;
+            if !has_next || count == task_num {
+                unsafe {
+                    // call init kernel
+                    self.queue.enqueue_write_buffer(&mut self.combs, CL_BLOCKING,
+                                0, &cl_combs, &[])?;
+                    let cl_task_num = count as cl_uint;
+                    // call init_kernel
+                    ExecuteKernel::new(&self.init_sum_fill_diff_change_kernel)
+                            .set_arg(&cl_task_num)
+                            .set_arg(&self.combs)
+                            .set_arg(&self.comb_tasks)
+                            .set_local_work_size(self.group_len)
+                            .set_global_work_size((((count + self.group_len - 1)
+                                    / self.group_len)) * self.group_len)
+                            .enqueue_nd_range(&self.queue)?;
+                    self.queue.finish()?;
+                    
+                    // TESTING!
+                    self.queue.enqueue_read_buffer(&mut self.comb_tasks, CL_BLOCKING,
+                                0, &mut cl_comb_tasks, &[])?;
+                    // compare results
+                    for i in 0..count {
+                        let exp_comb_task = &mut exp_cl_comb_tasks[
+                                self.comb_task_len*i..self.comb_task_len*(i+1)];
+                        let res_comb_task = &mut cl_comb_tasks[
+                                self.comb_task_len*i..self.comb_task_len*(i+1)];
+                        assert_eq!(exp_comb_task, res_comb_task, "comb_task {}", i);
+                    }
+                    // TESTING!
+                }
+                
+                let max_step_num = (self.n + L2_LEN_STEP_SIZE - 1) / L2_LEN_STEP_SIZE;
+                for i in (0..max_step_num).rev() {
+                    println!("Cyyy: {}", i*L2_LEN_STEP_SIZE);
+                    let cl_min_iter = (i*L2_LEN_STEP_SIZE) as cl_uint;
+                    let cl_task_num = count as cl_uint;
+                    // call process_comb_l1 kernel
+                    unsafe {
+                        let comb_l2_task_num_cl = [0];
+                        self.queue.enqueue_write_buffer(
+                                &mut self.comb_l2_task_num, CL_BLOCKING,
+                                0, &comb_l2_task_num_cl[..], &[])?;
+                        ExecuteKernel::new(&self.process_comb_l1_kernel)
+                                .set_arg(&cl_task_num)
+                                .set_arg(&cl_min_iter)
+                                .set_arg(&self.comb_tasks)
+                                .set_arg(&self.comb_l2_tasks)
+                                .set_arg(&self.comb_l2_task_num)
+                                .set_local_work_size(self.group_len)
+                                .set_global_work_size((((count + self.group_len - 1)
+                                        / self.group_len)) * self.group_len)
+                                .enqueue_nd_range(&self.queue)?;
+                    }
+                    self.queue.finish()?;
+                    // TESTING!
+                    let mut l2_tasks: Vec<CombL2Task> = vec![];
+                    for (id, l1_task) in l1_tasks.iter_mut().enumerate() {
+                        l1_task.process_comb_l1(id, i*L2_LEN_STEP_SIZE, &mut l2_tasks);
+                    }
+                    {
+                        let res_l2_task_num = unsafe {
+                            let mut comb_l2_task_num_cl = [0];
+                            self.queue.enqueue_read_buffer(
+                                    &mut self.comb_l2_task_num, CL_BLOCKING,
+                                    0, &mut comb_l2_task_num_cl[..], &[])?;
+                            comb_l2_task_num_cl[0] as usize
+                        };
+                        assert_eq!(l2_tasks.len(), res_l2_task_num);
+                        //let mut cl_l2_tasks = vec![self.task_num*];
+                    }
+                    // TESTING!
+                    l2_tasks.into_par_iter().for_each(|l2_task| {
+                        l2_task.process_comb_l2(self.n, self.k, |i, j| {
+                            result_count.fetch_add(1, atomic::Ordering::SeqCst);
+                        });
+                    });
+                }
+                
+                l1_tasks.clear();
+                count = 0;
+                cl_combs.clear();
+                println!("CCX: {:?}", final_comb);
+            }
+            
+            if !has_next {
+                break;
+            }
+        }
+        println!("Total results: {}", result_count.load(atomic::Ordering::SeqCst));
+        Ok(())
     }
 }
 
