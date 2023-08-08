@@ -1150,6 +1150,156 @@ impl CLNWork {
         }
         println!("Total results: {}", result_count.load(atomic::Ordering::SeqCst));
     }
+    
+    fn calc_cl(&mut self) {
+        let filled_clen = (self.n + 31) >> 5;
+        let mut count = 0;
+        
+        let mut comb_iter = CombineIter::new(self.k - 2, self.n - 2);
+        let mut final_comb = vec![0; self.k];
+        
+        let task_num = self.task_num;
+        let mut cl_combs = vec![];
+        let mut cl_comb_tasks: Vec<cl_uint> = vec![0; self.comb_task_len*self.task_num];
+                
+        println!("Calc CL");
+        {
+            let result_count_cl = [0];
+            unsafe {
+                self.queue.enqueue_write_buffer(&mut self.result_count, CL_BLOCKING,
+                                0, &result_count_cl[..], &[]).unwrap();
+            }
+        }
+        
+        let mut cl_result_count_old = 0;
+        
+        // compare results
+        loop {
+            let comb = comb_iter.get();
+            
+            let has_next_1 = comb[0] == 0 && comb.get(1).copied().unwrap_or(1) == 1;
+            
+            if has_next_1 {
+                final_comb[0..self.k-2].copy_from_slice(comb);
+                final_comb[self.k-2] = final_comb[self.k-3] + 1;
+                final_comb[self.k-1] = final_comb[self.k-3] + 2;
+            }
+            
+            if has_next_1 {
+                cl_combs.extend(final_comb.iter().map(|x| u32::try_from(*x).unwrap()));
+                count += 1;
+            }
+            
+            let has_next = has_next_1 && comb_iter.next();
+            
+            if !has_next || count == task_num {
+                unsafe {
+                    // call init kernel
+                    self.queue.enqueue_write_buffer(&mut self.combs, CL_BLOCKING,
+                                0, &cl_combs, &[]).unwrap();
+                    let cl_task_num = count as cl_uint;
+                    // println!("Count xxx: {} {} {}", cl_task_num,
+                    //          (((count + self.group_len - 1)
+                    //                 / self.group_len)) * self.group_len,
+                    //          cl_combs.len()
+                    //          );
+                    // call init_kernel
+                    ExecuteKernel::new(&self.init_sum_fill_diff_change_kernel)
+                            .set_arg(&cl_task_num)
+                            .set_arg(&self.combs)
+                            .set_arg(&self.comb_tasks)
+                            .set_local_work_size(self.group_len)
+                            .set_global_work_size((((count + self.group_len - 1)
+                                    / self.group_len)) * self.group_len)
+                            .enqueue_nd_range(&self.queue).unwrap();
+                    self.queue.finish().unwrap();
+                }
+                
+                let max_step_num = (self.n + L2_LEN_STEP_SIZE - 1) / L2_LEN_STEP_SIZE;
+                for i in (0..max_step_num).rev() {
+                    println!("Cyyy: {}", i*L2_LEN_STEP_SIZE);
+                    let cl_min_iter = (i*L2_LEN_STEP_SIZE) as cl_uint;
+                    let cl_task_num = count as cl_uint;
+                    // call process_comb_l1 kernel
+                    unsafe {
+                        let comb_l2_task_num_cl = [0];
+                        self.queue.enqueue_write_buffer(
+                                &mut self.comb_l2_task_num, CL_BLOCKING,
+                                0, &comb_l2_task_num_cl[..], &[]).unwrap();
+                        ExecuteKernel::new(&self.process_comb_l1_kernel)
+                                .set_arg(&cl_task_num)
+                                .set_arg(&cl_min_iter)
+                                .set_arg(&self.comb_tasks)
+                                .set_arg(&self.comb_l2_tasks)
+                                .set_arg(&self.comb_l2_task_num)
+                                .set_local_work_size(self.group_len)
+                                .set_global_work_size((((count + self.group_len - 1)
+                                        / self.group_len)) * self.group_len)
+                                .enqueue_nd_range(&self.queue).unwrap();
+                    }
+                    self.queue.finish().unwrap();
+                    let res_l2_task_num = unsafe {
+                        let mut comb_l2_task_num_cl = [0];
+                        self.queue.enqueue_read_buffer(
+                                &mut self.comb_l2_task_num, CL_BLOCKING,
+                                0, &mut comb_l2_task_num_cl[..], &[]).unwrap();
+                        comb_l2_task_num_cl[0] as usize
+                    };
+                    
+                    if res_l2_task_num != 0 {
+                        // call process_comb_l2 kernel
+                        unsafe {
+                            let cl_l2_task_num = res_l2_task_num as cl_uint;
+                            ExecuteKernel::new(&self.process_comb_l2_kernel)
+                                    .set_arg(&cl_l2_task_num)
+                                    .set_arg(&self.comb_tasks)
+                                    .set_arg(&self.comb_l2_tasks)
+                                    .set_arg(&self.results)
+                                    .set_arg(&self.result_count)
+                                    .set_local_work_size(self.group_len)
+                                    .set_global_work_size((((res_l2_task_num + self.group_len - 1)
+                                            / self.group_len)) * self.group_len)
+                                    .enqueue_nd_range(&self.queue).unwrap();
+                        }
+                        self.queue.finish().unwrap();
+                    }
+                    
+                    let mut result_count_cl = [0];
+                    unsafe {
+                        self.queue.enqueue_read_buffer(&mut self.result_count, CL_BLOCKING,
+                                        0, &mut result_count_cl[..], &[]).unwrap();
+                    }
+                    let result_count_cl_val = result_count_cl[0];
+                    if (result_count_cl_val > cl_result_count_old &&
+                            cl_result_count_old < u64::try_from(self.max_results).unwrap()) {
+                        let result_pos = usize::try_from(cl_result_count_old).unwrap();
+                        let result_count_cl_val = std::cmp::min(result_count_cl_val,
+                                    self.max_results as u64);
+                        let result_len = usize::try_from(
+                                    result_count_cl_val - cl_result_count_old).unwrap();
+                        let mut cl_results = vec![0; result_len*self.k];
+                        unsafe {
+                            self.queue.enqueue_read_buffer(&mut self.results, CL_BLOCKING,
+                                        4*result_pos*self.k, &mut cl_results[..], &[]).unwrap();
+                        }
+                        for ch in cl_results.chunks(self.k) {
+                            println!("Result {}: {} {:?}", self.n, self.k, ch);
+                        }
+                    }
+                    cl_result_count_old = result_count_cl_val;
+                }
+                
+                count = 0;
+                cl_combs.clear();
+                println!("CCX: {:?}", final_comb);
+            }
+            
+            if !has_next {
+                break;
+            }
+        }
+        println!("Total results {} {}: {}", self.n, self.k, cl_result_count_old);
+    }
 }
 
 // OpenCL stuff - end
@@ -1236,7 +1386,8 @@ fn main() {
         let mut clnwork = CLNWork::new(0, 277, 7).unwrap();
         //clnwork.test_init_kernel();
         //clnwork.test_calc();
-        clnwork.test_calc_cl();
+        //clnwork.test_calc_cl();
+        clnwork.calc_cl();
     }
     // gen_l1l2_tables();
 }
