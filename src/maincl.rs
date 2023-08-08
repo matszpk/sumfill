@@ -784,11 +784,11 @@ impl CLNWork {
                         exp_comb_task[idx + i] = *x as cl_uint);
                     exp_comb_task[exp_comb_task.len() - 1] = final_comb[self.k-2] as cl_uint;
                 }
+                count += 1;
             }
             
             let has_next = has_next_1 && comb_iter.next();
             
-            count += 1;
             if !has_next || count == self.task_num {
                 unsafe {
                     self.queue.enqueue_write_buffer(&mut self.combs, CL_BLOCKING,
@@ -969,11 +969,11 @@ impl CLNWork {
                         exp_comb_task[idx + i] = *x as cl_uint);
                     exp_comb_task[exp_comb_task.len() - 1] = final_comb[self.k-2] as cl_uint;
                 }
+                count += 1;
             }
             
             let has_next = has_next_1 && comb_iter.next();
             
-            count += 1;
             if !has_next || count == task_num {
                 unsafe {
                     // call init kernel
@@ -1200,9 +1200,9 @@ fn main() {
     // }
     {
         let mut clnwork = CLNWork::new(0, 122, 6).unwrap();
-        //clnwork.test_init_kernel().unwrap();
+        clnwork.test_init_kernel().unwrap();
         //clnwork.test_calc();
-        clnwork.test_calc_cl().unwrap();
+        //clnwork.test_calc_cl().unwrap();
     }
     // gen_l1l2_tables();
 }
