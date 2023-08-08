@@ -594,7 +594,7 @@ kernel void process_comb_l2(uint task_num, global CombTask* comb_tasks,
             ulong old = atom_inc(result_count);
             if (old < MAX_RESULTS) {
                 uint i2;
-                global const uint* comb = comb_tasks[gid].comb;
+                global const uint* comb = comb_tasks[l2_task->l1_task_id].comb;
                 for (i2 = 0; i2 < CONST_K-2; i2++)
                     results[old*CONST_K + i2] = comb[i2];
                 results[old*CONST_K + CONST_K-2] = l1;
@@ -1231,8 +1231,8 @@ fn main() {
     {
         let mut clnwork = CLNWork::new(0, 122, 6).unwrap();
         //clnwork.test_init_kernel().unwrap();
-        clnwork.test_calc();
-        //clnwork.test_calc_cl().unwrap();
+        //clnwork.test_calc();
+        clnwork.test_calc_cl().unwrap();
     }
     // gen_l1l2_tables();
 }
