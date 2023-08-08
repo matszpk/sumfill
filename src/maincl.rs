@@ -534,8 +534,8 @@ kernel void process_comb_l1(uint task_num, uint min_iter, global CombTask* comb_
             for (j0 = 0; j0 < CONST_K; j0++)
                 for (j1 = 0; j1 < CONST_K-j0; j1++) {
                     uint vidx = l1l2_sum_pos[j0*CONST_K+j1];
-                    const uint vlen = l1l2_sum_pos[j0*CONST_K+j1+1] - vidx;
-                    for (; vidx < vlen; vidx++) {
+                    const uint vend = l1l2_sum_pos[j0*CONST_K+j1+1];
+                    for (; vidx < vend; vidx++) {
                         uint fixsum = l1_filled_l1l2_sums[vidx] + FIX_SH;
                         l2_filled_l2[FCLEN*j1 + (fixsum>>5)] |= 1<<(fixsum&31);
                     }
@@ -553,8 +553,8 @@ kernel void process_comb_l1(uint task_num, uint min_iter, global CombTask* comb_
         for (j0 = 0; j0 < CONST_K; j0++)
             for (j1 = 0; j1 < CONST_K-j0; j1++) {
                 uint vidx = l1l2_sum_pos[j0*CONST_K+j1];
-                const uint vlen = l1l2_sum_pos[j0*CONST_K+j1+1] - vidx;
-                for (; vidx < vlen; vidx++) {
+                const uint vend = l1l2_sum_pos[j0*CONST_K+j1+1];
+                for (; vidx < vend; vidx++) {
                     uint sum = l1_filled_l1l2_sums[vidx] + j0+j1 + 2;
                     if (sum >= CONST_N)
                         sum -= CONST_N;
