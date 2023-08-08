@@ -728,7 +728,7 @@ impl CLNWork {
         })
     }
     
-    fn test_init_kernel(&mut self) -> Result<()> {
+    fn test_init_kernel(&mut self) {
         let filled_clen = (self.n + 31) >> 5;
         let mut count = 0;
         let mut exp_cl_comb_tasks: Vec<cl_uint> = vec![0; self.comb_task_len*self.task_num];
@@ -794,7 +794,7 @@ impl CLNWork {
             if !has_next || count == self.task_num {
                 unsafe {
                     self.queue.enqueue_write_buffer(&mut self.combs, CL_BLOCKING,
-                                0, &cl_combs, &[])?;
+                                0, &cl_combs, &[]).unwrap();
                     let cl_task_num = count as cl_uint;
                     println!("NDrange: {} {}", count, self.task_num);
                     // call init_kernel
@@ -805,10 +805,10 @@ impl CLNWork {
                             .set_local_work_size(self.group_len)
                             .set_global_work_size((((count + self.group_len - 1)
                                     / self.group_len)) * self.group_len)
-                            .enqueue_nd_range(&self.queue)?;
-                    self.queue.finish()?;
+                            .enqueue_nd_range(&self.queue).unwrap();
+                    self.queue.finish().unwrap();
                     self.queue.enqueue_read_buffer(&mut self.comb_tasks, CL_BLOCKING,
-                                0, &mut cl_comb_tasks, &[])?;
+                                0, &mut cl_comb_tasks, &[]).unwrap();
                     // compare results
                     for i in 0..count {
                         let exp_comb_task = &mut exp_cl_comb_tasks[
@@ -834,7 +834,6 @@ impl CLNWork {
         
         // call kernel
         // end of OpenCL stuff
-        Ok(())
     }
     
     fn test_calc(&mut self) {
@@ -910,7 +909,7 @@ impl CLNWork {
         println!("Total results: {}", result_count.load(atomic::Ordering::SeqCst));
     }
     
-    fn test_calc_cl(&mut self) -> Result<()> {
+    fn test_calc_cl(&mut self) {
         let filled_clen = (self.n + 31) >> 5;
         let mut count = 0;
         
@@ -930,7 +929,7 @@ impl CLNWork {
             let result_count_cl = [0];
             unsafe {
                 self.queue.enqueue_write_buffer(&mut self.result_count, CL_BLOCKING,
-                                0, &result_count_cl[..], &[])?;
+                                0, &result_count_cl[..], &[]).unwrap();
             }
         }
         
@@ -989,7 +988,7 @@ impl CLNWork {
                 unsafe {
                     // call init kernel
                     self.queue.enqueue_write_buffer(&mut self.combs, CL_BLOCKING,
-                                0, &cl_combs, &[])?;
+                                0, &cl_combs, &[]).unwrap();
                     let cl_task_num = count as cl_uint;
                     println!("Count xxx: {} {} {}", cl_task_num,
                              (((count + self.group_len - 1)
@@ -1004,12 +1003,12 @@ impl CLNWork {
                             .set_local_work_size(self.group_len)
                             .set_global_work_size((((count + self.group_len - 1)
                                     / self.group_len)) * self.group_len)
-                            .enqueue_nd_range(&self.queue)?;
-                    self.queue.finish()?;
+                            .enqueue_nd_range(&self.queue).unwrap();
+                    self.queue.finish().unwrap();
                     
                     // TESTING!
                     self.queue.enqueue_read_buffer(&mut self.comb_tasks, CL_BLOCKING,
-                                0, &mut cl_comb_tasks, &[])?;
+                                0, &mut cl_comb_tasks, &[]).unwrap();
                     // compare results
                     for i in 0..count {
                         let exp_comb_task = &mut exp_cl_comb_tasks[
@@ -1031,7 +1030,7 @@ impl CLNWork {
                         let comb_l2_task_num_cl = [0];
                         self.queue.enqueue_write_buffer(
                                 &mut self.comb_l2_task_num, CL_BLOCKING,
-                                0, &comb_l2_task_num_cl[..], &[])?;
+                                0, &comb_l2_task_num_cl[..], &[]).unwrap();
                         ExecuteKernel::new(&self.process_comb_l1_kernel)
                                 .set_arg(&cl_task_num)
                                 .set_arg(&cl_min_iter)
@@ -1041,9 +1040,9 @@ impl CLNWork {
                                 .set_local_work_size(self.group_len)
                                 .set_global_work_size((((count + self.group_len - 1)
                                         / self.group_len)) * self.group_len)
-                                .enqueue_nd_range(&self.queue)?;
+                                .enqueue_nd_range(&self.queue).unwrap();
                     }
-                    self.queue.finish()?;
+                    self.queue.finish().unwrap();
                     // TESTING!
                     let mut l2_tasks: Vec<CombL2Task> = vec![];
                     for (id, l1_task) in l1_tasks.iter_mut().enumerate() {
@@ -1053,7 +1052,7 @@ impl CLNWork {
                         let mut comb_l2_task_num_cl = [0];
                         self.queue.enqueue_read_buffer(
                                 &mut self.comb_l2_task_num, CL_BLOCKING,
-                                0, &mut comb_l2_task_num_cl[..], &[])?;
+                                0, &mut comb_l2_task_num_cl[..], &[]).unwrap();
                         comb_l2_task_num_cl[0] as usize
                     };
                     {
@@ -1062,7 +1061,7 @@ impl CLNWork {
                         unsafe {
                             self.queue.enqueue_read_buffer(
                                     &mut self.comb_l2_tasks, CL_BLOCKING,
-                                    0, &mut cl_l2_tasks[..], &[])?;
+                                    0, &mut cl_l2_tasks[..], &[]).unwrap();
                         }
                         let mut exp_l2_tasks = l2_tasks.clone();
                         exp_l2_tasks.sort();
@@ -1095,9 +1094,9 @@ impl CLNWork {
                                 .set_local_work_size(self.group_len)
                                 .set_global_work_size((((res_l2_task_num + self.group_len - 1)
                                         / self.group_len)) * self.group_len)
-                                .enqueue_nd_range(&self.queue)?;
+                                .enqueue_nd_range(&self.queue).unwrap();
                     }
-                    self.queue.finish()?;
+                    self.queue.finish().unwrap();
                     
                     // TESTING!
                     l2_tasks.into_par_iter().for_each(|l2_task| {
@@ -1108,7 +1107,7 @@ impl CLNWork {
                     let mut result_count_cl = [0];
                     unsafe {
                         self.queue.enqueue_read_buffer(&mut self.result_count, CL_BLOCKING,
-                                        0, &mut result_count_cl[..], &[])?;
+                                        0, &mut result_count_cl[..], &[]).unwrap();
                     }
                     assert_eq!(result_count.load(atomic::Ordering::SeqCst),
                             result_count_cl[0]);
@@ -1124,7 +1123,7 @@ impl CLNWork {
                         println!("New results: {} {}", result_pos, result_len);
                         unsafe {
                             self.queue.enqueue_read_buffer(&mut self.results, CL_BLOCKING,
-                                        4*result_pos*self.k, &mut cl_results[..], &[])?;
+                                        4*result_pos*self.k, &mut cl_results[..], &[]).unwrap();
                         }
                         for ch in cl_results.chunks(self.k) {
                             println!("Result {}: {} {:?}", self.n, self.k, ch);
@@ -1145,7 +1144,6 @@ impl CLNWork {
             }
         }
         println!("Total results: {}", result_count.load(atomic::Ordering::SeqCst));
-        Ok(())
     }
 }
 
@@ -1231,9 +1229,9 @@ fn main() {
     // }
     {
         let mut clnwork = CLNWork::new(0, 277, 7).unwrap();
-        //clnwork.test_init_kernel().unwrap();
+        //clnwork.test_init_kernel();
         //clnwork.test_calc();
-        clnwork.test_calc_cl().unwrap();
+        clnwork.test_calc_cl();
     }
     // gen_l1l2_tables();
 }
