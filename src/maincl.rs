@@ -250,7 +250,6 @@ impl CombTask {
             0
         };
         let mut l1_filled = vec![0; self.comb_filled.len()];
-        let mut l2_filled = vec![0; self.comb_filled.len()];
         let l1_filled_l1 = &mut self.filled_l1;
         let l1_filled_l1l2_sums = &mut self.filled_l1l2_sums;
         let l1_filled_l2_templ = &mut self.filled_l2;
@@ -450,6 +449,118 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
         }
     }
 }
+
+typedef struct _CombL2Task {
+    uint l2_filled_l2[CONST_K*FCLEN];
+    uint l1_filled[FCLEN];
+    uint l1;
+} CombL2Task;
+
+inline void shift_filled_lx_global(global uint* filled_l1) {
+    uint i;
+    for (i = 0; i < CONST_K; i++) {
+        global uint* filled = filled_l1 + FCLEN*i;
+        uint shift = i+1;
+        uint vprev = filled[FCLEN-1];
+        uint j;
+        for (j = 0; j < FCLEN; j++) {
+            uint vcur = filled[j];
+            filled[j] = (vcur << shift) | (vprev >> (32-shift));
+            vprev = vcur;
+        }
+        if (FIX_SH != 0) {
+            uint mask = (1 << shift) - 1;
+            // fix first bits
+            uint vold = filled[0] & mask;
+            filled[0] = (filled[0] & ~mask) | (vold << FIX_SH);
+            if ((32 - FIX_SH) < shift) {
+                filled[1] |= vold >> (32-FIX_SH);
+            }
+        }
+    }
+}
+
+inline void apply_filled_lx_global(global uint* filled_l1, private uint* comb_filled,
+                    private uint* out_filled) {
+    uint i;
+    for (i = 0; i < FCLEN; i++)
+        out_filled[i] = comb_filled[i];
+    for (i = 0; i < CONST_K; i++) {
+        uint j = 0;
+        for (j = 0; j < FCLEN; j++) {
+            out_filled[j] |= filled_l1[FCLEN*i + j];
+        }
+    }
+}
+
+kernel void process_l1(uint task_num, uint min_iter, global CombTask* comb_tasks,
+                    global CombL2Task* comb_l2_tasks, global uint* comb_l2_task_num) {
+    const uint gid = get_global_id(0);
+    if (gid >= task_num)
+        return;
+    global CombTask* comb_task = comb_tasks + gid;
+    
+    uint start = comb_task->comb_k_l1;
+    if (min_iter > CONST_N - (start+1))
+        return;
+    
+    global uint* l1_filled_l1 = comb_task->filled_l1;
+    global uint* l1_filled_l1l2_sums = comb_task->filled_l1l2_sums;
+    global uint* l1_filled_l2_templ = comb_task->filled_l2;
+    private uint comb_filled[FCLEN];
+    private uint l1_filled[FCLEN];
+    uint i;
+    for (i = 0; i < FCLEN; i++)
+        comb_filled[i] = comb_task->comb_filled[i];
+    
+    for (i = start; i < CONST_N-1; i++) {
+        uint j0, j1;
+        if (min_iter > CONST_N-(i+1)) {
+            comb_task->comb_k_l1 = i;
+            return;
+        }
+        
+        apply_filled_lx_global(l1_filled_l1, comb_filled, l1_filled);
+        
+        {   // put new L2 task
+            const uint l2pos = atomic_inc(comb_l2_task_num);
+            global CombL2Task* l2_task = comb_l2_tasks + l2pos;
+            global uint* l2_filled_l2 = l2_task->l2_filled_l2;
+            for (j0 = 0; j0 < CONST_K*FCLEN; j0++)
+                l2_filled_l2[j0] = l1_filled_l2_templ[j0];
+            for (j0 = 0; j0 < CONST_K; j0++)
+                for (j1 = 0; j1 < CONST_K-j0; j1++) {
+                    uint vidx = l1l2_sum_pos[j0*CONST_K+j1];
+                    const uint vlen = l1l2_sum_pos[j0*CONST_K+j1+1] - vidx;
+                    for (; vidx < vlen; vidx++) {
+                        uint fixsum = l1_filled_l1l2_sums[vidx] + FIX_SH;
+                        l2_filled_l2[FCLEN*j1 + (fixsum>>5)] |= 1<<(fixsum&31);
+                    }
+                }
+            for (j0 = 0; j0 < CONST_K*FCLEN; j0++)
+                l2_task->l2_filled_l2[j0] = l2_filled_l2[j0];
+            for (j0 = 0; j0 < FCLEN; j0++)
+                l2_task->l1_filled[j0] = l1_filled[j0];
+            l2_task->l1 = i;
+        }
+        
+        // shift
+        shift_filled_lx_global(l1_filled_l1);
+        for (j0 = 0; j0 < CONST_K; j0++)
+            for (j1 = 0; j1 < CONST_K-j0; j1++) {
+                uint vidx = l1l2_sum_pos[j0*CONST_K+j1];
+                const uint vlen = l1l2_sum_pos[j0*CONST_K+j1+1] - vidx;
+                for (; vidx < vlen; vidx++) {
+                    uint sum = l1_filled_l1l2_sums[vidx] + j0+j1 + 2;
+                    if (sum >= CONST_N)
+                        sum -= CONST_N;
+                    l1_filled_l1l2_sums[vidx] = sum;
+                }
+            }
+        shift_filled_lx_global(l1_filled_l2_templ);
+    }
+    comb_task->comb_k_l1 = CONST_N-1;
+}
 "#;
 
 /// OpenCL stuff
@@ -471,7 +582,7 @@ pub struct CLNWork {
     combs: Buffer<cl_uint>,
     comb_tasks: Buffer<cl_uint>,
     comb_l2_tasks: Buffer<cl_uint>,
-    comb_l2_tasks_num: Buffer<cl_uint>,
+    comb_l2_task_num: Buffer<cl_uint>,
     results: Buffer<cl_uint>,
     result_count: Buffer<cl_ulong>,
 }
@@ -532,7 +643,7 @@ impl CLNWork {
             Buffer::<cl_uint>::create(&context, CL_MEM_READ_WRITE,
                     comb_l2_task_len * task_num * L2_LEN_STEP_SIZE, ptr::null_mut())?
         };
-        let comb_l2_tasks_num = unsafe {
+        let comb_l2_task_num = unsafe {
             Buffer::<cl_uint>::create(&context, CL_MEM_READ_WRITE, 1, ptr::null_mut())?
         };
         let results = unsafe {
@@ -560,7 +671,7 @@ impl CLNWork {
            combs,
            comb_tasks,
            comb_l2_tasks,
-           comb_l2_tasks_num,
+           comb_l2_task_num,
            results,
            result_count
         })
@@ -828,7 +939,7 @@ fn main() {
     //     //calc_min_sumn_to_fill_par_all_opencl(i);
     // }
     {
-        let mut clnwork = CLNWork::new(0, 300, 7).unwrap();
+        let mut clnwork = CLNWork::new(0, 277, 7).unwrap();
         //clnwork.test_init_kernel().unwrap();
         clnwork.test_calc();
     }
