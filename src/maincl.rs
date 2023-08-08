@@ -1210,7 +1210,7 @@ impl CLNWork {
         let mut cl_combs = vec![];
         let mut cl_comb_tasks: Vec<cl_uint> = vec![0; self.comb_task_len*self.task_num];
                 
-        println!("Calc CL");
+        println!("Calc CL: {} {}", self.n, self.k);
         {
             let result_count_cl = [0];
             unsafe {
@@ -1265,7 +1265,7 @@ impl CLNWork {
                 
                 let max_step_num = (self.n + L2_LEN_STEP_SIZE - 1) / L2_LEN_STEP_SIZE;
                 for i in (0..max_step_num).rev() {
-                    println!("Cyyy: {}", i*L2_LEN_STEP_SIZE);
+                    //println!("Cyyy: {}", i*L2_LEN_STEP_SIZE);
                     let cl_min_iter = (i*L2_LEN_STEP_SIZE) as cl_uint;
                     let cl_task_num = count as cl_uint;
                     // call process_comb_l1 kernel
@@ -1339,7 +1339,7 @@ impl CLNWork {
                 
                 count = 0;
                 cl_combs.clear();
-                println!("CCX: {} {}: {:?}", self.n, self.k, final_comb);
+                eprintln!("Tasks: {} {}: {:?}", self.n, self.k, final_comb);
             }
             
             if !has_next {
