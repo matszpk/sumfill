@@ -934,7 +934,7 @@ impl CLNWork {
             }
         }
         
-        let cl_result_count_old = 0;
+        let mut cl_result_count_old = 0;
         
         // compare results
         loop {
