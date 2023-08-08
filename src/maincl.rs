@@ -495,6 +495,43 @@ inline void apply_filled_lx_global(global uint* filled_l1, private uint* comb_fi
     }
 }
 
+inline void shift_filled_lx_private(private uint* filled_l1) {
+    uint i;
+    for (i = 0; i < CONST_K; i++) {
+        private uint* filled = filled_l1 + FCLEN*i;
+        uint shift = i+1;
+        uint vprev = filled[FCLEN-1];
+        uint j;
+        for (j = 0; j < FCLEN; j++) {
+            uint vcur = filled[j];
+            filled[j] = (vcur << shift) | (vprev >> (32-shift));
+            vprev = vcur;
+        }
+        if (FIX_SH != 0) {
+            uint mask = (1 << shift) - 1;
+            // fix first bits
+            uint vold = filled[0] & mask;
+            filled[0] = (filled[0] & ~mask) | (vold << FIX_SH);
+            if ((32 - FIX_SH) < shift) {
+                filled[1] |= vold >> (32-FIX_SH);
+            }
+        }
+    }
+}
+
+inline void apply_filled_lx_private(private uint* filled_l1, private uint* comb_filled,
+                    private uint* out_filled) {
+    uint i;
+    for (i = 0; i < FCLEN; i++)
+        out_filled[i] = comb_filled[i];
+    for (i = 0; i < CONST_K; i++) {
+        uint j = 0;
+        for (j = 0; j < FCLEN; j++) {
+            out_filled[j] |= filled_l1[FCLEN*i + j];
+        }
+    }
+}
+
 kernel void process_comb_l1(uint task_num, uint min_iter, global CombTask* comb_tasks,
                     global CombL2Task* comb_l2_tasks, global uint* comb_l2_task_num) {
     const uint gid = get_global_id(0);
@@ -572,16 +609,19 @@ kernel void process_comb_l2(uint task_num, global CombTask* comb_tasks,
     if (gid >= task_num)
         return;
     const global CombL2Task* l2_task = comb_l2_tasks + gid;
-    global uint* l2_filled_l2 = l2_task->l2_filled_l2;
+    //global uint* l2_filled_l2 = l2_task->l2_filled_l2;
+    private uint l2_filled_l2[FCLEN*CONST_K];
     private uint l1_filled[FCLEN];
     private uint l2_filled[FCLEN];
     uint j;
     for (j = 0; j < FCLEN; j++)
         l1_filled[j] = l2_task->l1_filled[j];
+    for (j = 0; j < FCLEN*CONST_K; j++)
+        l2_filled_l2[j] = l2_task->l2_filled_l2[j];
     
     uint l1 = l2_task->l1;
     for (j = l1 + 1; j < CONST_N; j++) {
-        apply_filled_lx_global(l2_filled_l2, l1_filled, l2_filled);
+        apply_filled_lx_private(l2_filled_l2, l1_filled, l2_filled);
         uint val = UINT_MAX;
         uint i = 0;
         if (FIX_SH != 0) {
@@ -601,7 +641,7 @@ kernel void process_comb_l2(uint task_num, global CombTask* comb_tasks,
                 results[old*CONST_K + CONST_K-1] = j;
             }
         }
-        shift_filled_lx_global(l2_filled_l2);
+        shift_filled_lx_private(l2_filled_l2);
     }
 }
 "#;
@@ -1291,7 +1331,7 @@ impl CLNWork {
                 
                 count = 0;
                 cl_combs.clear();
-                println!("CCX: {:?}", final_comb);
+                println!("CCX: {} {}: {:?}", self.n, self.k, final_comb);
             }
             
             if !has_next {
@@ -1383,7 +1423,7 @@ fn main() {
     //     //calc_min_sumn_to_fill_par_all_opencl(i);
     // }
     {
-        let mut clnwork = CLNWork::new(0, 277, 7).unwrap();
+        let mut clnwork = CLNWork::new(0, 533, 7).unwrap();
         //clnwork.test_init_kernel();
         //clnwork.test_calc();
         //clnwork.test_calc_cl();
