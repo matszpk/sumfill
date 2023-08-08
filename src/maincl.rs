@@ -303,13 +303,21 @@ const PROGRAM_SOURCE: &str = r#"
 
 #pragma OPENCL EXTENSION cl_khr_int64_base_atomics : enable
 
-#if CONST_K < 6 || CONST_K > 9
+#if CONST_K < 5 || CONST_K > 9
 #error "Unsupported CONST_K"
 #endif
 
 // #if CONST_N < 161
 // #error "Unsupported CONST_N"
 // #endif
+
+#if CONST_K == 5
+#define L1L2_TOTAL_SUMS (35)
+constant uint l1l2_sum_pos[25] = {
+    0, 10, 16, 19, 20, 20, 26, 29, 30, 30, 30, 33, 34, 34, 34, 34, 35, 35, 35, 35,
+    35, 35, 35, 35, 35
+};
+#endif
 
 #if CONST_K == 6
 #define L1L2_TOTAL_SUMS (126)
@@ -1157,8 +1165,8 @@ impl CLNWork {
                     assert_eq!(result_count.load(atomic::Ordering::SeqCst),
                             result_count_cl[0]);
                     let result_count_cl_val = result_count_cl[0];
-                    if (result_count_cl_val > cl_result_count_old &&
-                            cl_result_count_old < u64::try_from(self.max_results).unwrap()) {
+                    if result_count_cl_val > cl_result_count_old &&
+                            cl_result_count_old < u64::try_from(self.max_results).unwrap() {
                         let result_pos = usize::try_from(cl_result_count_old).unwrap();
                         let result_count_cl_val = std::cmp::min(result_count_cl_val,
                                     self.max_results as u64);
@@ -1191,7 +1199,7 @@ impl CLNWork {
         println!("Total results: {}", result_count.load(atomic::Ordering::SeqCst));
     }
     
-    fn calc_cl(&mut self) {
+    fn calc_cl(&mut self) -> bool {
         let filled_clen = (self.n + 31) >> 5;
         let mut count = 0;
         
@@ -1338,7 +1346,13 @@ impl CLNWork {
                 break;
             }
         }
-        println!("Total results {} {}: {}", self.n, self.k, cl_result_count_old);
+        
+        if cl_result_count_old != 0 {
+            println!("Total results {} {}: {}", self.n, self.k, cl_result_count_old);
+            true
+        } else {
+            false
+        }
     }
 }
 
@@ -1414,20 +1428,31 @@ fn gen_l1l2_tables() {
 }
 
 fn main() {
-    // let mut args = env::args().skip(1);
-    // let n_start: usize = args.next().expect("Required n_start argument")
-    //     .parse().expect("Required n_start argument");
-    // let n_end: usize = args.next().expect("Required n_end argument")
-    //     .parse().expect("Required n_end argument");
-    // for i in n_start..n_end {
-    //     //calc_min_sumn_to_fill_par_all_opencl(i);
-    // }
-    {
-        let mut clnwork = CLNWork::new(0, 533, 7).unwrap();
-        //clnwork.test_init_kernel();
-        //clnwork.test_calc();
-        //clnwork.test_calc_cl();
-        clnwork.calc_cl();
+    let mut args = env::args().skip(1);
+    let n_start: usize = args.next().expect("Required n_start argument")
+        .parse().expect("Required n_start argument");
+    let n_end: usize = args.next().expect("Required n_end argument")
+        .parse().expect("Required n_end argument");
+    for i in n_start..n_end {
+        // find k_start
+        let ks = (1..64).find(|&x| {
+            let max_n = usize::try_from(combinations(x as u64, x+x-1 as u64)).unwrap();
+            //writeln!(io::stdout().lock(), "KSmax {}: {}", i, max_n);
+            max_n >= i
+        }).unwrap().try_into().unwrap();
+        for k in ks..64 {
+            let mut clnwork = CLNWork::new(0, i, k).unwrap();
+            if clnwork.calc_cl() {
+                break;
+            }
+        }
     }
+    // {
+    //     let mut clnwork = CLNWork::new(0, 544, 7).unwrap();
+    //     //clnwork.test_init_kernel();
+    //     clnwork.test_calc();
+    //     //clnwork.test_calc_cl();
+    //     clnwork.calc_cl();
+    // }
     // gen_l1l2_tables();
 }
