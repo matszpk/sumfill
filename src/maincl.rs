@@ -177,9 +177,9 @@ fn modulo_add(a: usize, b: usize, n: usize) -> usize {
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 struct CombL2Task {
     l1_task_id: usize,
+    l1: usize,
     l2_filled_l2: Vec<u32>,
     l1_filled: Vec<u32>,
-    l1: usize,
 }
 
 impl CombL2Task {
