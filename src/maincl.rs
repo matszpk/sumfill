@@ -746,47 +746,47 @@ impl CLNWork {
         loop {
             let comb = comb_iter.get();
             
-            if comb[0] != 0 || comb.get(1).copied().unwrap_or(1) != 1 {
-                break;
-            }
+            let has_next_1 = comb[0] == 0 && comb.get(1).copied().unwrap_or(1) == 1;
             
-            final_comb[0..self.k-2].copy_from_slice(comb);
-            final_comb[self.k-2] = final_comb[self.k-3] + 1;
-            final_comb[self.k-1] = final_comb[self.k-3] + 2;
-            
-            init_sum_fill_diff_change(self.n, &final_comb, &mut comb_filled,
-                            &mut filled_l1, &mut filled_l1l2_sums, &mut filled_l2);
-            
-            {
-                // put comb to cl_combs
-                cl_combs[count*self.k..(count+1)*self.k].iter_mut().enumerate()
-                        .for_each(|(i,x)| *x = final_comb[i] as cl_uint);
-                // put to expected cl comb_task
-                let mut exp_comb_task = &mut exp_cl_comb_tasks[
-                        self.comb_task_len*count..self.comb_task_len*(count+1)];
-                // copy comb
-                comb.iter().take(self.k-2).enumerate().for_each(|(i, x)|
-                    exp_comb_task[i] = *x as cl_uint);
-                // copy comb_filled
-                comb_filled.iter().enumerate().for_each(|(i, x)|
-                    exp_comb_task[(self.k-2) + i] = *x as cl_uint);
-                // copy filled_l1
-                filled_l1.iter().enumerate().for_each(|(i, x)|
-                    exp_comb_task[(self.k-2) + filled_clen + i] = *x as cl_uint);
-                // copy filled_l1l2_sum
-                let mut idx = (self.k-2) + filled_clen + filled_clen*self.k;
-                for j in 0..self.k*self.k {
-                    filled_l1l2_sums[j].iter().enumerate().for_each(|(i,x)|
+            if has_next_1 {
+                final_comb[0..self.k-2].copy_from_slice(comb);
+                final_comb[self.k-2] = final_comb[self.k-3] + 1;
+                final_comb[self.k-1] = final_comb[self.k-3] + 2;
+                
+                init_sum_fill_diff_change(self.n, &final_comb, &mut comb_filled,
+                                &mut filled_l1, &mut filled_l1l2_sums, &mut filled_l2);
+                
+                {
+                    // put comb to cl_combs
+                    cl_combs[count*self.k..(count+1)*self.k].iter_mut().enumerate()
+                            .for_each(|(i,x)| *x = final_comb[i] as cl_uint);
+                    // put to expected cl comb_task
+                    let mut exp_comb_task = &mut exp_cl_comb_tasks[
+                            self.comb_task_len*count..self.comb_task_len*(count+1)];
+                    // copy comb
+                    comb.iter().take(self.k-2).enumerate().for_each(|(i, x)|
+                        exp_comb_task[i] = *x as cl_uint);
+                    // copy comb_filled
+                    comb_filled.iter().enumerate().for_each(|(i, x)|
+                        exp_comb_task[(self.k-2) + i] = *x as cl_uint);
+                    // copy filled_l1
+                    filled_l1.iter().enumerate().for_each(|(i, x)|
+                        exp_comb_task[(self.k-2) + filled_clen + i] = *x as cl_uint);
+                    // copy filled_l1l2_sum
+                    let mut idx = (self.k-2) + filled_clen + filled_clen*self.k;
+                    for j in 0..self.k*self.k {
+                        filled_l1l2_sums[j].iter().enumerate().for_each(|(i,x)|
+                            exp_comb_task[idx + i] = *x as cl_uint);
+                        idx += filled_l1l2_sums[j].len();
+                    }
+                    // copy filled_l2
+                    filled_l2.iter().enumerate().for_each(|(i, x)|
                         exp_comb_task[idx + i] = *x as cl_uint);
-                    idx += filled_l1l2_sums[j].len();
+                    exp_comb_task[exp_comb_task.len() - 1] = final_comb[self.k-2] as cl_uint;
                 }
-                // copy filled_l2
-                filled_l2.iter().enumerate().for_each(|(i, x)|
-                    exp_comb_task[idx + i] = *x as cl_uint);
-                exp_comb_task[exp_comb_task.len() - 1] = final_comb[self.k-2] as cl_uint;
             }
             
-            let has_next = comb_iter.next();
+            let has_next = has_next_1 && comb_iter.next();
             
             count += 1;
             if !has_next || count == self.task_num {
@@ -980,6 +980,11 @@ impl CLNWork {
                     self.queue.enqueue_write_buffer(&mut self.combs, CL_BLOCKING,
                                 0, &cl_combs, &[])?;
                     let cl_task_num = count as cl_uint;
+                    println!("Count xxx: {} {} {}", cl_task_num,
+                             (((count + self.group_len - 1)
+                                    / self.group_len)) * self.group_len,
+                             cl_combs.len()
+                             );
                     // call init_kernel
                     ExecuteKernel::new(&self.init_sum_fill_diff_change_kernel)
                             .set_arg(&cl_task_num)
@@ -1194,9 +1199,10 @@ fn main() {
     //     //calc_min_sumn_to_fill_par_all_opencl(i);
     // }
     {
-        let mut clnwork = CLNWork::new(0, 277, 7).unwrap();
+        let mut clnwork = CLNWork::new(0, 122, 6).unwrap();
         //clnwork.test_init_kernel().unwrap();
-        clnwork.test_calc();
+        //clnwork.test_calc();
+        clnwork.test_calc_cl().unwrap();
     }
     // gen_l1l2_tables();
 }
