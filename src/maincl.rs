@@ -589,7 +589,7 @@ kernel void process_comb_l2(uint task_num, global CombTask* comb_tasks,
         uint i = 0;
         if (FIX_SH != 0) {
             i = 1;
-            val = l2_filled[0] | ~((1 << FIX_SH) - 1);
+            val &= (l2_filled[0] | ((1 << FIX_SH) - 1));
         }
         for (; i < FCLEN; i++)
             val &= l2_filled[i];
