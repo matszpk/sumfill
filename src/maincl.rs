@@ -864,11 +864,11 @@ impl CLNWork {
             //                 &mut filled_l1, &mut filled_l1l2_sums, &mut filled_l2);
             if has_next_1 {
                 l1_tasks.push(CombTask::new(self.n, &final_comb));
+                count += 1;
             }
             
             let has_next = has_next_1 && comb_iter.next();
             
-            count += 1;
             if !has_next || count == task_num {
                 let max_step_num = (self.n + L2_LEN_STEP_SIZE - 1) / L2_LEN_STEP_SIZE;
                 for i in (0..max_step_num).rev() {
@@ -1200,8 +1200,8 @@ fn main() {
     // }
     {
         let mut clnwork = CLNWork::new(0, 122, 6).unwrap();
-        clnwork.test_init_kernel().unwrap();
-        //clnwork.test_calc();
+        //clnwork.test_init_kernel().unwrap();
+        clnwork.test_calc();
         //clnwork.test_calc_cl().unwrap();
     }
     // gen_l1l2_tables();
