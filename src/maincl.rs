@@ -451,6 +451,7 @@ kernel void init_sum_fill_diff_change(uint task_num, global const uint* combs,
 }
 
 typedef struct _CombL2Task {
+    uint l1_task_id;
     uint l2_filled_l2[CONST_K*FCLEN];
     uint l1_filled[FCLEN];
     uint l1;
@@ -493,7 +494,7 @@ inline void apply_filled_lx_global(global uint* filled_l1, private uint* comb_fi
     }
 }
 
-kernel void process_l1(uint task_num, uint min_iter, global CombTask* comb_tasks,
+kernel void process_comb_l1(uint task_num, uint min_iter, global CombTask* comb_tasks,
                     global CombL2Task* comb_l2_tasks, global uint* comb_l2_task_num) {
     const uint gid = get_global_id(0);
     if (gid >= task_num)
@@ -542,6 +543,7 @@ kernel void process_l1(uint task_num, uint min_iter, global CombTask* comb_tasks
             for (j0 = 0; j0 < FCLEN; j0++)
                 l2_task->l1_filled[j0] = l1_filled[j0];
             l2_task->l1 = i;
+            l2_task->l1_task_id = gid;
         }
         
         // shift
@@ -560,6 +562,48 @@ kernel void process_l1(uint task_num, uint min_iter, global CombTask* comb_tasks
         shift_filled_lx_global(l1_filled_l2_templ);
     }
     comb_task->comb_k_l1 = CONST_N-1;
+}
+
+#define MAX_RESULT (10000)
+
+kernel void process_comb_l2(uint task_num, global CombTask* comb_tasks,
+            const global CombL2Task* comb_l2_tasks,
+            global uint* results, global ulong* result_count) {
+    const uint gid = get_global_id(0);
+    if (gid >= task_num)
+        return;
+    global CombL2Task* l2_task = comb_l2_tasks + gid;
+    global uint* l2_filled_l2 = l2_task->l2_filled_l2;
+    private l1_filled[FCLEN];
+    private l2_filled[FCLEN];
+    uint j;
+    for (j = 0; j < FCLEN; j++)
+        l1_filled[j] = l2_task->l1_filled[j];
+    
+    uint l1 = l2_task->l1;
+    for (j = l1 + 1; j < CONST_N; j++) {
+        apply_filled_lx_global(l2_filled_l2, l1_filled, l2_filled);
+        uint val = 0;
+        uint i = 0;
+        if (FIX_SH != 0) {
+            i = 1;
+            val = l2_filled[0] | ~((1 << FIX_SH) - 1);
+        }
+        for (; i < FCLEN; i++)
+            val &= l2_filled[i];
+        if (val == UINT_MAX) {
+            ulong old = atom_inc(result_count);
+            if (old < MAX_RESULT) {
+                uint i2;
+                global const uint* comb = comb_tasks[gid].comb;
+                for (i2 = 0; i2 < CONST_K-2; i2++)
+                    results[j*CONST_K+ i2] = comb[i2];
+                results[j*CONST_K+ CONST_K-2] = l1;
+                results[j*CONST_K+ CONST_K-1] = j;
+            }
+        }
+        shift_filled_lx_global(l2_filled_l2);
+    }
 }
 "#;
 
