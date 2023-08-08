@@ -1130,6 +1130,7 @@ impl CLNWork {
                             println!("Result {}: {} {:?}", self.n, self.k, ch);
                         }
                     }
+                    cl_result_count_old = result_count_cl_val;
                     // TESTING!
                 }
                 
@@ -1229,7 +1230,7 @@ fn main() {
     //     //calc_min_sumn_to_fill_par_all_opencl(i);
     // }
     {
-        let mut clnwork = CLNWork::new(0, 122, 6).unwrap();
+        let mut clnwork = CLNWork::new(0, 277, 7).unwrap();
         //clnwork.test_init_kernel().unwrap();
         //clnwork.test_calc();
         clnwork.test_calc_cl().unwrap();
