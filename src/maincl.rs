@@ -1060,7 +1060,8 @@ impl CLNWork {
                                 CombL2Task {
                                     l1_task_id: *ch.first().unwrap() as usize,
                                     l2_filled_l2: Vec::from(&ch[1..1 + filled_clen*self.k]),
-                                    l1_filled: Vec::from(&ch[ch.len() - filled_clen - 1..]),
+                                    l1_filled: Vec::from(
+                                        &ch[ch.len() - filled_clen - 1..ch.len()-1]),
                                     l1: *ch.last().unwrap() as usize,
                                 }
                             ).collect::<Vec<_>>();
@@ -1201,8 +1202,8 @@ fn main() {
     {
         let mut clnwork = CLNWork::new(0, 122, 6).unwrap();
         //clnwork.test_init_kernel().unwrap();
-        clnwork.test_calc();
-        //clnwork.test_calc_cl().unwrap();
+        //clnwork.test_calc();
+        clnwork.test_calc_cl().unwrap();
     }
     // gen_l1l2_tables();
 }
