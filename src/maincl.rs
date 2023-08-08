@@ -174,7 +174,7 @@ fn modulo_add(a: usize, b: usize, n: usize) -> usize {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 struct CombL2Task {
     l1_task_id: usize,
     l2_filled_l2: Vec<u32>,
@@ -1033,23 +1033,69 @@ impl CLNWork {
                     for (id, l1_task) in l1_tasks.iter_mut().enumerate() {
                         l1_task.process_comb_l1(id, i*L2_LEN_STEP_SIZE, &mut l2_tasks);
                     }
+                    let res_l2_task_num = unsafe {
+                        let mut comb_l2_task_num_cl = [0];
+                        self.queue.enqueue_read_buffer(
+                                &mut self.comb_l2_task_num, CL_BLOCKING,
+                                0, &mut comb_l2_task_num_cl[..], &[])?;
+                        comb_l2_task_num_cl[0] as usize
+                    };
                     {
-                        let res_l2_task_num = unsafe {
-                            let mut comb_l2_task_num_cl = [0];
-                            self.queue.enqueue_read_buffer(
-                                    &mut self.comb_l2_task_num, CL_BLOCKING,
-                                    0, &mut comb_l2_task_num_cl[..], &[])?;
-                            comb_l2_task_num_cl[0] as usize
-                        };
                         assert_eq!(l2_tasks.len(), res_l2_task_num);
-                        //let mut cl_l2_tasks = vec![self.task_num*];
+                        let mut cl_l2_tasks = vec![0u32; res_l2_task_num*self.comb_l2_task_len];
+                        unsafe {
+                            self.queue.enqueue_read_buffer(
+                                    &mut self.comb_l2_tasks, CL_BLOCKING,
+                                    0, &mut cl_l2_tasks[..], &[])?;
+                        }
+                        let mut exp_l2_tasks = l2_tasks.clone();
+                        exp_l2_tasks.sort();
+                        let mut res_l2_tasks = cl_l2_tasks
+                            .chunks(self.comb_l2_task_len).map(|ch|
+                                CombL2Task {
+                                    l1_task_id: *ch.first().unwrap() as usize,
+                                    l2_filled_l2: Vec::from(&ch[1..1 + filled_clen*self.k]),
+                                    l1_filled: Vec::from(&ch[ch.len() - filled_clen - 1..]),
+                                    l1: *ch.last().unwrap() as usize,
+                                }
+                            ).collect::<Vec<_>>();
+                        res_l2_tasks.sort();
+                        for i in 0..res_l2_task_num {
+                            assert_eq!(exp_l2_tasks[i], res_l2_tasks[i], "l2_task {}", i);
+                        }
                     }
+                    // TESTING!
+                    
+                    // call process_comb_l1 kernel
+                    unsafe {
+                        let cl_l2_task_num = res_l2_task_num as cl_uint;
+                        ExecuteKernel::new(&self.process_comb_l2_kernel)
+                                .set_arg(&cl_l2_task_num)
+                                .set_arg(&self.comb_tasks)
+                                .set_arg(&self.comb_l2_tasks)
+                                .set_arg(&self.results)
+                                .set_arg(&self.result_count)
+                                .set_local_work_size(self.group_len)
+                                .set_global_work_size((((res_l2_task_num + self.group_len - 1)
+                                        / self.group_len)) * self.group_len)
+                                .enqueue_nd_range(&self.queue)?;
+                    }
+                    self.queue.finish()?;
+                    
                     // TESTING!
                     l2_tasks.into_par_iter().for_each(|l2_task| {
                         l2_task.process_comb_l2(self.n, self.k, |i, j| {
                             result_count.fetch_add(1, atomic::Ordering::SeqCst);
                         });
                     });
+                    let mut result_count_cl = [0];
+                    unsafe {
+                        self.queue.enqueue_read_buffer(&mut self.result_count, CL_BLOCKING,
+                                        0, &mut result_count_cl[..], &[])?;
+                    }
+                    assert_eq!(result_count.load(atomic::Ordering::SeqCst),
+                            result_count_cl[0]);
+                    // TESTING!
                 }
                 
                 l1_tasks.clear();
