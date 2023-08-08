@@ -887,7 +887,14 @@ impl CLNWork {
                     // }
                     l2_tasks.into_par_iter().for_each(|l2_task| {
                         l2_task.process_comb_l2(self.n, self.k, |i, j| {
-                            result_count.fetch_add(1, atomic::Ordering::SeqCst);
+                            let rc = result_count.fetch_add(1, atomic::Ordering::SeqCst);
+                            if rc < u64::try_from(self.max_results).unwrap() {
+                                let mut comb = Vec::from(
+                                    &l1_tasks[l2_task.l1_task_id].comb[0..self.k-2]);
+                                comb.push(i);
+                                comb.push(j);
+                                println!("Result {}: {} {:?}", self.n, self.k, comb);
+                            }
                         });
                     });
                 }
@@ -1224,8 +1231,8 @@ fn main() {
     {
         let mut clnwork = CLNWork::new(0, 122, 6).unwrap();
         //clnwork.test_init_kernel().unwrap();
-        //clnwork.test_calc();
-        clnwork.test_calc_cl().unwrap();
+        clnwork.test_calc();
+        //clnwork.test_calc_cl().unwrap();
     }
     // gen_l1l2_tables();
 }
