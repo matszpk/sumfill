@@ -741,16 +741,16 @@ kernel void process_comb_l2_shp(uint task_num, global CombTask* comb_tasks,
             val &= l2_filled[i];
         // exchange
         lbuf[eid] = val;
-//#if THPT>=8
-//        barrier(CLK_LOCAL_MEM_FENCE);
-//        if (eid < 4)
-//            lbuf[eid] &= lbuf[eid + 4];
-//#endif
-//#if THPT>=4
+#if THPT>=8
+        barrier(CLK_LOCAL_MEM_FENCE);
+        if (eid < 4)
+            lbuf[eid] &= lbuf[eid + 4];
+#endif
+#if THPT>=4
         barrier(CLK_LOCAL_MEM_FENCE);
         if (eid < 2)
             lbuf[eid] &= lbuf[eid + 2];
-//#endif
+#endif
         barrier(CLK_LOCAL_MEM_FENCE);
         val = lbuf[eid] & lbuf[eid + 1];
         // end of exchange
@@ -1105,6 +1105,12 @@ impl CLNWork {
         } else {
             (1, &self.process_comb_l2_kernel)
         };
+        
+        if shp {
+            assert_eq!(self.group_len%thpt, 0);
+            assert!(filled_clen >= 4);
+            println!("SHP version: {}", thpt);
+        }
         
         let mut cl_result_count_old = 0;
         
@@ -1581,7 +1587,7 @@ fn main() {
     //     }
     // }
     {
-        let mut clnwork = CLNWork::new(0, 256, 7).unwrap();
+        let mut clnwork = CLNWork::new(0, 320, 7).unwrap();
         //clnwork.test_init_kernel();
         //clnwork.test_calc();
         clnwork.test_calc_cl(true);
