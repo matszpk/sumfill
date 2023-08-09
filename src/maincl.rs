@@ -745,10 +745,7 @@ kernel void process_comb_l2_shp(uint task_num, global CombTask* comb_tasks,
         if (eid < 2)
             lbuf[eid] &= lbuf[eid + 2];
         barrier(CLK_LOCAL_MEM_FENCE);
-        if (eid < 1)
-            lbuf[eid] &= lbuf[eid + 1];
-        barrier(CLK_LOCAL_MEM_FENCE);
-        val = lbuf[eid];
+        val = lbuf[eid] & lbuf[eid + 1];
         // end of exchange
         if (eid == 0 && val == UINT_MAX) {
             ulong old = atom_inc(result_count);
@@ -900,8 +897,6 @@ impl CLNWork {
         let mut exp_cl_comb_tasks: Vec<cl_uint> = vec![0; self.comb_task_len*self.task_num];
         let mut cl_combs: Vec<cl_uint> = vec![0; self.k*self.task_num];
         let mut cl_comb_tasks: Vec<cl_uint> = vec![0; self.comb_task_len*self.task_num];
-        let mut comb_task_data: Vec<(Vec<u32>, Vec<u32>, Vec<u32>)> = vec![
-                        (vec![], vec![], vec![]); self.task_num];
         
         let mut comb_iter = CombineIter::new(self.k - 2, self.n - 2);
         let mut final_comb = vec![0; self.k];
@@ -1003,7 +998,6 @@ impl CLNWork {
     }
     
     fn test_calc(&mut self) {
-        let filled_clen = (self.n + 31) >> 5;
         let mut count = 0;
         
         let mut comb_iter = CombineIter::new(self.k - 2, self.n - 2);
