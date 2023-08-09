@@ -1358,6 +1358,13 @@ impl CLNWork {
             (1, &self.process_comb_l2_kernel)
         };
         
+        if shp {
+            assert_eq!(self.group_len%thpt, 0);
+            assert!(filled_clen >= 4);
+            assert!(self.n > 288);
+            println!("SHP version: {}", thpt);
+        }
+        
         let mut cl_result_count_old = 0;
         
         // compare results
