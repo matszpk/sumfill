@@ -656,7 +656,7 @@ kernel void process_comb_l2(uint task_num, global CombTask* comb_tasks,
 // threads per task
 #define THPT (4)
 #define THPT_SH (2)
-#define THPT_FCLEN ((FCLEN + THPT-1) / THPT)
+#define THPT_FCLEN ((FCLEN + THPT-1) >> THPT_SH)
 
 inline void shift_filled_lx_private_shp(private uint* filled_l1, local uint* lbuf,
             uint tid, uint eid, uint peid, uint lastp) {
@@ -675,15 +675,13 @@ inline void shift_filled_lx_private_shp(private uint* filled_l1, local uint* lbu
             filled[j] = (vcur << shift) | (vprev >> (32-shift));
             vprev = vcur;
         }
-        if (tid == 0) {
-            if (FIX_SH != 0) {
-                uint mask = (1 << shift) - 1;
-                // fix first bits
-                uint vold = filled[0] & mask;
-                filled[0] = (filled[0] & ~mask) | (vold << FIX_SH);
-                if ((32 - FIX_SH) < shift) {
-                    filled[1] |= vold >> (32-FIX_SH);
-                }
+        if (tid == 0 && FIX_SH != 0) {
+            uint mask = (1 << shift) - 1;
+            // fix first bits
+            uint vold = filled[0] & mask;
+            filled[0] = (filled[0] & ~mask) | (vold << FIX_SH);
+            if ((32 - FIX_SH) < shift) {
+                filled[1] |= vold >> (32-FIX_SH);
             }
         }
     }
