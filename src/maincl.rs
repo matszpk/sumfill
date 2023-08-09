@@ -1575,31 +1575,32 @@ fn gen_l1l2_tables() {
 }
 
 fn main() {
-    // let mut args = env::args().skip(1);
-    // let n_start: usize = args.next().expect("Required n_start argument")
-    //     .parse().expect("Required n_start argument");
-    // let n_end: usize = args.next().expect("Required n_end argument")
-    //     .parse().expect("Required n_end argument");
-    // for i in n_start..n_end {
-    //     // find k_start
-    //     let ks = (1..64).find(|&x| {
-    //         let max_n = usize::try_from(combinations(x as u64, x+x-1 as u64)).unwrap();
-    //         //writeln!(io::stdout().lock(), "KSmax {}: {}", i, max_n);
-    //         max_n >= i
-    //     }).unwrap().try_into().unwrap();
-    //     for k in ks..64 {
-    //         let mut clnwork = CLNWork::new(0, i, k).unwrap();
-    //         if clnwork.calc_cl(false) {
-    //             break;
-    //         }
-    //     }
-    // }
-    {
-        let mut clnwork = CLNWork::new(0, 495, 7).unwrap();
-        //clnwork.test_init_kernel();
-        //clnwork.test_calc();
-        clnwork.test_calc_cl(true);
-        //clnwork.calc_cl();
+    let mut args = env::args().skip(1);
+    let n_start: usize = args.next().expect("Required n_start argument")
+        .parse().expect("Required n_start argument");
+    let n_end: usize = args.next().expect("Required n_end argument")
+        .parse().expect("Required n_end argument");
+    let shp: bool = args.next().unwrap_or("".to_string()) == "shp";
+    for i in n_start..n_end {
+        // find k_start
+        let ks = (1..64).find(|&x| {
+            let max_n = usize::try_from(combinations(x as u64, x+x-1 as u64)).unwrap();
+            //writeln!(io::stdout().lock(), "KSmax {}: {}", i, max_n);
+            max_n >= i
+        }).unwrap().try_into().unwrap();
+        for k in ks..64 {
+            let mut clnwork = CLNWork::new(0, i, k).unwrap();
+            if clnwork.calc_cl(shp) {
+                break;
+            }
+        }
     }
+    // {
+    //     let mut clnwork = CLNWork::new(0, 495, 7).unwrap();
+    //     //clnwork.test_init_kernel();
+    //     //clnwork.test_calc();
+    //     clnwork.test_calc_cl(true);
+    //     //clnwork.calc_cl();
+    // }
     // gen_l1l2_tables();
 }
