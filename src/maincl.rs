@@ -710,7 +710,7 @@ kernel void process_comb_l2_shp(uint task_num, global CombTask* comb_tasks,
         return;
     const uint eid = gid & (THPT - 1);
     const uint peid = (gid + THPT - 1) & (THPT - 1);
-    const uint thclen = (tid == THPT - 1) ?
+    const uint thclen = (eid == THPT - 1) ?
             (FCLEN - THPT_FCLEN*(THPT-1)) : THPT_FCLEN;
     const uint th_offset = eid*THPT_FCLEN;
     const global CombL2Task* l2_task = comb_l2_tasks + tid;
@@ -1109,6 +1109,7 @@ impl CLNWork {
         if shp {
             assert_eq!(self.group_len%thpt, 0);
             assert!(filled_clen >= 4);
+            assert!(self.n > 288);
             println!("SHP version: {}", thpt);
         }
         
@@ -1587,7 +1588,7 @@ fn main() {
     //     }
     // }
     {
-        let mut clnwork = CLNWork::new(0, 320, 7).unwrap();
+        let mut clnwork = CLNWork::new(0, 495, 7).unwrap();
         //clnwork.test_init_kernel();
         //clnwork.test_calc();
         clnwork.test_calc_cl(true);
