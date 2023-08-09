@@ -659,23 +659,23 @@ kernel void process_comb_l2(uint task_num, global CombTask* comb_tasks,
 #define THPT_FCLEN ((FCLEN + THPT-1) >> THPT_SH)
 
 inline void shift_filled_lx_private_shp(private uint* filled_l1, local uint* lbuf,
-            uint tid, uint eid, uint peid, uint lastp) {
+            uint eid, uint peid, uint thclen) {
     uint i;
     for (i = 0; i < CONST_K; i++) {
         private uint* filled = filled_l1 + THPT_FCLEN*i;
         uint shift = i+1;
         // exchange data
-        lbuf[eid] = filled[lastp];
+        lbuf[eid] = filled[thclen-1];
         barrier(CLK_LOCAL_MEM_FENCE);
         uint vprev = lbuf[peid];
         // end of exchange data
         uint j;
-        for (j = 0; j < THPT_FCLEN; j++) {
+        for (j = 0; j < thclen; j++) {
             uint vcur = filled[j];
             filled[j] = (vcur << shift) | (vprev >> (32-shift));
             vprev = vcur;
         }
-        if (tid == 0 && FIX_SH != 0) {
+        if (eid == 0 && FIX_SH != 0) {
             uint mask = (1 << shift) - 1;
             // fix first bits
             uint vold = filled[0] & mask;
@@ -710,20 +710,20 @@ kernel void process_comb_l2_shp(uint task_num, global CombTask* comb_tasks,
         return;
     const uint eid = gid & (THPT - 1);
     const uint peid = (gid + THPT - 1) & (THPT - 1);
-    const uint lastp = (tid == THPT - 1) ?
-            (FCLEN - THPT_FCLEN*(THPT-1) - 1) : (THPT_FCLEN - 1);
+    const uint thclen = (tid == THPT - 1) ?
+            (FCLEN - THPT_FCLEN*(THPT-1)) : THPT_FCLEN;
     const uint th_offset = eid*THPT_FCLEN;
     const global CombL2Task* l2_task = comb_l2_tasks + tid;
     private uint l2_filled_l2[THPT_FCLEN*CONST_K];
     private uint l1_filled[THPT_FCLEN];
     private uint l2_filled[THPT_FCLEN];
     uint j, j0;
-    for (j = 0; j < THPT_FCLEN; j++)
+    for (j = 0; j < thclen; j++)
         l1_filled[j] = l2_task->l1_filled[th_offset + j];
     for (j0 = 0; j0 < CONST_K; j0++) {
         const global uint* l2_filled_l2_p = l2_task->l2_filled_l2 + j0*FCLEN + th_offset;
-        for (j = 0; j < THPT_FCLEN; j++)
-            l2_filled_l2[j] = l2_filled_l2_p[j];
+        for (j = 0; j < thclen; j++)
+            l2_filled_l2[THPT_FCLEN*j0 + j] = l2_filled_l2_p[j];
     }
     
     local uint lbuf_group[GROUP_LEN];
@@ -737,20 +737,20 @@ kernel void process_comb_l2_shp(uint task_num, global CombTask* comb_tasks,
             i = 1;
             val &= (l2_filled[0] | ((1 << FIX_SH) - 1));
         }
-        for (; i < THPT_FCLEN; i++)
+        for (; i < thclen; i++)
             val &= l2_filled[i];
         // exchange
         lbuf[eid] = val;
-#if THPT>=8
-        barrier(CLK_LOCAL_MEM_FENCE);
-        if (eid < 4)
-            lbuf[eid] &= lbuf[eid + 4];
-#endif
-#if THPT>=4
+//#if THPT>=8
+//        barrier(CLK_LOCAL_MEM_FENCE);
+//        if (eid < 4)
+//            lbuf[eid] &= lbuf[eid + 4];
+//#endif
+//#if THPT>=4
         barrier(CLK_LOCAL_MEM_FENCE);
         if (eid < 2)
             lbuf[eid] &= lbuf[eid + 2];
-#endif
+//#endif
         barrier(CLK_LOCAL_MEM_FENCE);
         val = lbuf[eid] & lbuf[eid + 1];
         // end of exchange
@@ -765,7 +765,7 @@ kernel void process_comb_l2_shp(uint task_num, global CombTask* comb_tasks,
                 results[old*CONST_K + CONST_K-1] = j;
             }
         }
-        shift_filled_lx_private_shp(l2_filled_l2, lbuf, tid, eid, peid, lastp);
+        shift_filled_lx_private_shp(l2_filled_l2, lbuf, eid, peid, thclen);
     }
 }
 "#;
@@ -1561,31 +1561,31 @@ fn gen_l1l2_tables() {
 }
 
 fn main() {
-    let mut args = env::args().skip(1);
-    let n_start: usize = args.next().expect("Required n_start argument")
-        .parse().expect("Required n_start argument");
-    let n_end: usize = args.next().expect("Required n_end argument")
-        .parse().expect("Required n_end argument");
-    for i in n_start..n_end {
-        // find k_start
-        let ks = (1..64).find(|&x| {
-            let max_n = usize::try_from(combinations(x as u64, x+x-1 as u64)).unwrap();
-            //writeln!(io::stdout().lock(), "KSmax {}: {}", i, max_n);
-            max_n >= i
-        }).unwrap().try_into().unwrap();
-        for k in ks..64 {
-            let mut clnwork = CLNWork::new(0, i, k).unwrap();
-            if clnwork.calc_cl(false) {
-                break;
-            }
-        }
-    }
-    // {
-    //     let mut clnwork = CLNWork::new(0, 544, 7).unwrap();
-    //     //clnwork.test_init_kernel();
-    //     clnwork.test_calc();
-    //     //clnwork.test_calc_cl();
-    //     clnwork.calc_cl();
+    // let mut args = env::args().skip(1);
+    // let n_start: usize = args.next().expect("Required n_start argument")
+    //     .parse().expect("Required n_start argument");
+    // let n_end: usize = args.next().expect("Required n_end argument")
+    //     .parse().expect("Required n_end argument");
+    // for i in n_start..n_end {
+    //     // find k_start
+    //     let ks = (1..64).find(|&x| {
+    //         let max_n = usize::try_from(combinations(x as u64, x+x-1 as u64)).unwrap();
+    //         //writeln!(io::stdout().lock(), "KSmax {}: {}", i, max_n);
+    //         max_n >= i
+    //     }).unwrap().try_into().unwrap();
+    //     for k in ks..64 {
+    //         let mut clnwork = CLNWork::new(0, i, k).unwrap();
+    //         if clnwork.calc_cl(false) {
+    //             break;
+    //         }
+    //     }
     // }
+    {
+        let mut clnwork = CLNWork::new(0, 256, 7).unwrap();
+        //clnwork.test_init_kernel();
+        //clnwork.test_calc();
+        clnwork.test_calc_cl(true);
+        //clnwork.calc_cl();
+    }
     // gen_l1l2_tables();
 }
