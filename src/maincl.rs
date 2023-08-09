@@ -1392,11 +1392,6 @@ impl CLNWork {
                     self.queue.enqueue_write_buffer(&mut self.combs, CL_BLOCKING,
                                 0, &cl_combs, &[]).unwrap();
                     let cl_task_num = count as cl_uint;
-                    // println!("Count xxx: {} {} {}", cl_task_num,
-                    //          (((count + self.group_len - 1)
-                    //                 / self.group_len)) * self.group_len,
-                    //          cl_combs.len()
-                    //          );
                     // call init_kernel
                     ExecuteKernel::new(&self.init_sum_fill_diff_change_kernel)
                             .set_arg(&cl_task_num)
