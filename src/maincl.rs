@@ -675,7 +675,7 @@ inline void shift_filled_lx_private_shp(private uint* filled_l1, local uint* lbu
             filled[j] = (vcur << shift) | (vprev >> (32-shift));
             vprev = vcur;
         }
-        if (eid == 0 && FIX_SH != 0) {
+        if ((eid == 0) && (FIX_SH != 0)) {
             uint mask = (1 << shift) - 1;
             // fix first bits
             uint vold = filled[0] & mask;
@@ -688,13 +688,13 @@ inline void shift_filled_lx_private_shp(private uint* filled_l1, local uint* lbu
 }
 
 inline void apply_filled_lx_private_shp(private uint* filled_l1, private uint* comb_filled,
-                    private uint* out_filled) {
+                    private uint* out_filled, uint thclen) {
     uint i;
-    for (i = 0; i < THPT_FCLEN; i++)
+    for (i = 0; i < thclen; i++)
         out_filled[i] = comb_filled[i];
     for (i = 0; i < CONST_K; i++) {
         uint j = 0;
-        for (j = 0; j < THPT_FCLEN; j++) {
+        for (j = 0; j < thclen; j++) {
             out_filled[j] |= filled_l1[THPT_FCLEN*i + j];
         }
     }
@@ -704,7 +704,7 @@ kernel void process_comb_l2_shp(uint task_num, global CombTask* comb_tasks,
             const global CombL2Task* comb_l2_tasks,
             global uint* results, global ulong* result_count) {
     const uint gid = get_global_id(0);
-    const uint lid = get_global_id(0);
+    const uint lid = get_local_id(0);
     const uint tid = gid >> THPT_SH;
     if (tid >= task_num)
         return;
@@ -730,10 +730,10 @@ kernel void process_comb_l2_shp(uint task_num, global CombTask* comb_tasks,
     local uint* lbuf = lbuf_group + (lid & ~(THPT - 1));
     uint l1 = l2_task->l1;
     for (j = l1 + 1; j < CONST_N; j++) {
-        apply_filled_lx_private_shp(l2_filled_l2, l1_filled, l2_filled);
+        apply_filled_lx_private_shp(l2_filled_l2, l1_filled, l2_filled, thclen);
         uint val = UINT_MAX;
         uint i = 0;
-        if (eid == 0 && FIX_SH != 0) {
+        if ((eid == 0) && (FIX_SH != 0)) {
             i = 1;
             val &= (l2_filled[0] | ((1 << FIX_SH) - 1));
         }
