@@ -741,12 +741,12 @@ kernel void process_comb_l2_shp(uint task_num, global CombTask* comb_tasks,
             val &= l2_filled[i];
         // exchange
         lbuf[eid] = val;
-#if THPT==8
+#if THPT>=8
         barrier(CLK_LOCAL_MEM_FENCE);
         if (eid < 4)
             lbuf[eid] &= lbuf[eid + 4];
 #endif
-#if THPT==4
+#if THPT>=4
         barrier(CLK_LOCAL_MEM_FENCE);
         if (eid < 2)
             lbuf[eid] &= lbuf[eid + 2];
