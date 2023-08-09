@@ -652,6 +652,120 @@ kernel void process_comb_l2(uint task_num, global CombTask* comb_tasks,
         shift_filled_lx_private(l2_filled_l2);
     }
 }
+
+// threads per task
+#define THPT (4)
+#define THPT_SH (2)
+#define THPT_FCLEN ((FCLEN + THPT-1) / THPT)
+
+inline void shift_filled_lx_private_shp(private uint* filled_l1, local uint* lbuf,
+            uint tid, uint eid, uint peid, uint lastp) {
+    uint i;
+    for (i = 0; i < CONST_K; i++) {
+        private uint* filled = filled_l1 + THPT_FCLEN*i;
+        uint shift = i+1;
+        // exchange data
+        lbuf[eid] = filled[lastp];
+        barrier(CLK_LOCAL_MEM_FENCE);
+        uint vprev = lbuf[peid];
+        // end of exchange data
+        uint j;
+        for (j = 0; j < THPT_FCLEN; j++) {
+            uint vcur = filled[j];
+            filled[j] = (vcur << shift) | (vprev >> (32-shift));
+            vprev = vcur;
+        }
+        if (tid == 0) {
+            if (FIX_SH != 0) {
+                uint mask = (1 << shift) - 1;
+                // fix first bits
+                uint vold = filled[0] & mask;
+                filled[0] = (filled[0] & ~mask) | (vold << FIX_SH);
+                if ((32 - FIX_SH) < shift) {
+                    filled[1] |= vold >> (32-FIX_SH);
+                }
+            }
+        }
+    }
+}
+
+inline void apply_filled_lx_private_shp(private uint* filled_l1, private uint* comb_filled,
+                    private uint* out_filled) {
+    uint i;
+    for (i = 0; i < THPT_FCLEN; i++)
+        out_filled[i] = comb_filled[i];
+    for (i = 0; i < CONST_K; i++) {
+        uint j = 0;
+        for (j = 0; j < THPT_FCLEN; j++) {
+            out_filled[j] |= filled_l1[THPT_FCLEN*i + j];
+        }
+    }
+}
+
+kernel void process_comb_l2_shp(uint task_num, global CombTask* comb_tasks,
+            const global CombL2Task* comb_l2_tasks,
+            global uint* results, global ulong* result_count) {
+    const uint gid = get_global_id(0);
+    const uint lid = get_global_id(0);
+    const uint tid = gid >> THPT_SH;
+    if (tid >= task_num)
+        return;
+    const uint eid = gid & (THPT - 1);
+    const uint peid = (gid + THPT - 1) & (THPT - 1);
+    const uint lastp = (tid == THPT - 1) ?
+            (FCLEN - THPT_FCLEN*(THPT-1) - 1) : (THPT_FCLEN - 1);
+    const uint th_offset = eid*THPT_FCLEN;
+    const global CombL2Task* l2_task = comb_l2_tasks + tid;
+    private uint l2_filled_l2[THPT_FCLEN*CONST_K];
+    private uint l1_filled[THPT_FCLEN];
+    private uint l2_filled[THPT_FCLEN];
+    uint j, j0;
+    for (j = 0; j < THPT_FCLEN; j++)
+        l1_filled[j] = l2_task->l1_filled[th_offset + j];
+    for (j0 = 0; j0 < CONST_K; j0++) {
+        const global uint* l2_filled_l2_p = l2_task->l2_filled_l2 + j0*FCLEN + th_offset;
+        for (j = 0; j < THPT_FCLEN; j++)
+            l2_filled_l2[j] = l2_filled_l2_p[j];
+    }
+    
+    local uint lbuf_group[GROUP_LEN];
+    local uint* lbuf = lbuf_group + (lid & ~(THPT - 1));
+    uint l1 = l2_task->l1;
+    for (j = l1 + 1; j < CONST_N; j++) {
+        apply_filled_lx_private_shp(l2_filled_l2, l1_filled, l2_filled);
+        uint val = UINT_MAX;
+        uint i = 0;
+        if (eid == 0 && FIX_SH != 0) {
+            i = 1;
+            val &= (l2_filled[0] | ((1 << FIX_SH) - 1));
+        }
+        for (; i < THPT_FCLEN; i++)
+            val &= l2_filled[i];
+        // exchange
+        lbuf[eid] = val;
+        barrier(CLK_LOCAL_MEM_FENCE);
+        if (eid < 2)
+            lbuf[eid] &= lbuf[eid + 2];
+        barrier(CLK_LOCAL_MEM_FENCE);
+        if (eid < 1)
+            lbuf[eid] &= lbuf[eid + 1];
+        barrier(CLK_LOCAL_MEM_FENCE);
+        val = lbuf[eid];
+        // end of exchange
+        if (eid == 0 && val == UINT_MAX) {
+            ulong old = atom_inc(result_count);
+            if (old < MAX_RESULTS) {
+                uint i2;
+                global const uint* comb = comb_tasks[l2_task->l1_task_id].comb;
+                for (i2 = 0; i2 < CONST_K-2; i2++)
+                    results[old*CONST_K + i2] = comb[i2];
+                results[old*CONST_K + CONST_K-2] = l1;
+                results[old*CONST_K + CONST_K-1] = j;
+            }
+        }
+        shift_filled_lx_private_shp(l2_filled_l2, lbuf, tid, eid, peid, lastp);
+    }
+}
 "#;
 
 /// OpenCL stuff
@@ -666,6 +780,7 @@ pub struct CLNWork {
     init_sum_fill_diff_change_kernel: Kernel,
     process_comb_l1_kernel: Kernel,
     process_comb_l2_kernel: Kernel,
+    process_comb_l2_shp_kernel: Kernel,
     max_results: usize,
     group_num: usize,
     group_len: usize,
@@ -679,6 +794,9 @@ pub struct CLNWork {
     results: Buffer<cl_uint>,
     result_count: Buffer<cl_ulong>,
 }
+
+const THPT: usize = 4;
+const THPT_SH: usize = 2;
 
 impl CLNWork {
     fn new(device_index: usize, n: usize, k: usize) -> Result<Self> {
@@ -715,6 +833,7 @@ impl CLNWork {
         let init_kernel = Kernel::create(&program, "init_sum_fill_diff_change")?;
         let process_comb_l1_kernel = Kernel::create(&program, "process_comb_l1")?;
         let process_comb_l2_kernel = Kernel::create(&program, "process_comb_l2")?;
+        let process_comb_l2_shp_kernel = Kernel::create(&program, "process_comb_l2_shp")?;
         
         let l1l2_total_sums = match k {
             5 => 32,
@@ -761,6 +880,7 @@ impl CLNWork {
            init_sum_fill_diff_change_kernel: init_kernel,
            process_comb_l1_kernel,
            process_comb_l2_kernel,
+           process_comb_l2_shp_kernel,
            group_num,
            group_len,
            comb_task_len,
@@ -957,7 +1077,7 @@ impl CLNWork {
         println!("Total results: {}", result_count.load(atomic::Ordering::SeqCst));
     }
     
-    fn test_calc_cl(&mut self) {
+    fn test_calc_cl(&mut self, shp: bool) {
         let filled_clen = (self.n + 31) >> 5;
         let mut count = 0;
         
@@ -980,6 +1100,12 @@ impl CLNWork {
                                 0, &result_count_cl[..], &[]).unwrap();
             }
         }
+        
+        let (thpt, process_comb_l2_kernel) = if shp {
+            (THPT, &self.process_comb_l2_shp_kernel)
+        } else {
+            (1, &self.process_comb_l2_kernel)
+        };
         
         let mut cl_result_count_old = 0;
         
@@ -1137,14 +1263,15 @@ impl CLNWork {
                         // call process_comb_l2 kernel
                         unsafe {
                             let cl_l2_task_num = res_l2_task_num as cl_uint;
-                            ExecuteKernel::new(&self.process_comb_l2_kernel)
+                            ExecuteKernel::new(process_comb_l2_kernel)
                                     .set_arg(&cl_l2_task_num)
                                     .set_arg(&self.comb_tasks)
                                     .set_arg(&self.comb_l2_tasks)
                                     .set_arg(&self.results)
                                     .set_arg(&self.result_count)
                                     .set_local_work_size(self.group_len)
-                                    .set_global_work_size((((res_l2_task_num + self.group_len - 1)
+                                    .set_global_work_size(
+                                            (((res_l2_task_num*thpt + self.group_len - 1)
                                             / self.group_len)) * self.group_len)
                                     .enqueue_nd_range(&self.queue).unwrap();
                         }
@@ -1199,7 +1326,7 @@ impl CLNWork {
         println!("Total results: {}", result_count.load(atomic::Ordering::SeqCst));
     }
     
-    fn calc_cl(&mut self) -> bool {
+    fn calc_cl(&mut self, shp: bool) -> bool {
         let filled_clen = (self.n + 31) >> 5;
         let mut count = 0;
         
@@ -1218,6 +1345,12 @@ impl CLNWork {
                                 0, &result_count_cl[..], &[]).unwrap();
             }
         }
+        
+        let (thpt, process_comb_l2_kernel) = if shp {
+            (THPT, &self.process_comb_l2_shp_kernel)
+        } else {
+            (1, &self.process_comb_l2_kernel)
+        };
         
         let mut cl_result_count_old = 0;
         
@@ -1298,14 +1431,15 @@ impl CLNWork {
                         // call process_comb_l2 kernel
                         unsafe {
                             let cl_l2_task_num = res_l2_task_num as cl_uint;
-                            ExecuteKernel::new(&self.process_comb_l2_kernel)
+                            ExecuteKernel::new(process_comb_l2_kernel)
                                     .set_arg(&cl_l2_task_num)
                                     .set_arg(&self.comb_tasks)
                                     .set_arg(&self.comb_l2_tasks)
                                     .set_arg(&self.results)
                                     .set_arg(&self.result_count)
                                     .set_local_work_size(self.group_len)
-                                    .set_global_work_size((((res_l2_task_num + self.group_len - 1)
+                                    .set_global_work_size(
+                                        (((res_l2_task_num*thpt + self.group_len - 1)
                                             / self.group_len)) * self.group_len)
                                     .enqueue_nd_range(&self.queue).unwrap();
                         }
@@ -1442,7 +1576,7 @@ fn main() {
         }).unwrap().try_into().unwrap();
         for k in ks..64 {
             let mut clnwork = CLNWork::new(0, i, k).unwrap();
-            if clnwork.calc_cl() {
+            if clnwork.calc_cl(false) {
                 break;
             }
         }
