@@ -1575,7 +1575,16 @@ fn main() {
         .parse().expect("Required n_start argument");
     let n_end: usize = args.next().expect("Required n_end argument")
         .parse().expect("Required n_end argument");
-    let shp: bool = args.next().unwrap_or("".to_string()) == "shp";
+    
+    let (shp, max_k) = if let Some(s) = args.next() {
+        if s == "shp" {
+            (true, 64)
+        } else {
+            let max_k = s.parse().unwrap();
+            let shp = args.next().unwrap_or_default() == "shp";
+            (shp, max_k)
+        }
+    } else { (false, 64) };
     for i in n_start..n_end {
         // find k_start
         let ks = (1..64).find(|&x| {
@@ -1583,7 +1592,7 @@ fn main() {
             //writeln!(io::stdout().lock(), "KSmax {}: {}", i, max_n);
             max_n >= i
         }).unwrap().try_into().unwrap();
-        for k in ks..64 {
+        for k in ks..=max_k {
             let mut clnwork = CLNWork::new(0, i, k).unwrap();
             if clnwork.calc_cl(shp) {
                 break;
