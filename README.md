@@ -3,16 +3,16 @@
 sum sum:
 what must be size k of choosen set of numbers to fill modulo domain n (modulo n) by their sum of
 combination with replacemenets of number from choosen set?
-n - defines domain of modulo - modulo n.
-S - choosen numbers
-k - length of S
-C - combination with replacements of length k of numbers from set S
+* n - defines domain of modulo - modulo n.
+* S - choosen numbers
+* k - length of S
+* C - combination with replacements of length k of numbers from set S
 
-exists S for all i in [0..n) exists C=comb_with_reps(S,k): sum(C) mod n == i
-k = length(S)
-
+`exists S for all i in [0..n) exists C=comb_with_reps(S,k): sum(C) mod n == i
+k = length(S)`
 
 example:
+```
 n=23, k=4, [0, 1, 3, 15]
 0 = (0+0+0+0) mod 23, 1 = (1+0+0+0) mod 23, 2 = (1+1+0+0) mod 23,
 3 = (1+1+1+0) mod 23, 4 = (1+1+1+1) mod 23, 5 = (3+1+1+0) mod 23,
@@ -22,6 +22,7 @@ n=23, k=4, [0, 1, 3, 15]
 15 = (15+0+0+0) mod 23, 16 = (15+1+0+0) mod 23, 17 = (15+1+1+0) mod 23,
 18 = (15+1+1+1) mod 23, 19 = (15+3+1+0) mod 23, 20 = (15+3+1+1) mod 23,
 21 = (15+3+3+0) mod 23, 22 = (15+3+3+1) mod 23
+```
 
 --------------------
 Game:
