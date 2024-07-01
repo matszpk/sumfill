@@ -1,0 +1,48 @@
+## SUMFILL PROBLEM
+
+sum sum:
+what must be size k of choosen set of numbers to fill modulo domain n (modulo n) by their sum of
+combination with replacemenets of number from choosen set?
+n - defines domain of modulo - modulo n.
+S - choosen numbers
+k - length of S
+C - combination with replacements of length k of numbers from set S
+
+exists S for all i in [0..n) exists C=comb_with_reps(S,k): sum(C) mod n == i
+k = length(S)
+
+
+example:
+n=23, k=4, [0, 1, 3, 15]
+0 = (0+0+0+0) mod 23, 1 = (1+0+0+0) mod 23, 2 = (1+1+0+0) mod 23,
+3 = (1+1+1+0) mod 23, 4 = (1+1+1+1) mod 23, 5 = (3+1+1+0) mod 23,
+6 = (3+1+1+1) mod 23, 7 = (3+3+1+0) mod 23, 8 = (3+3+1+1) mod 23,
+9 = (3+3+3+0) mod 23, 10 = (3+3+3+1) mod 23, 11 = (15+15+3+1) mod 23,
+12 = (3+3+3+3) mod 23, 13 = (15+15+3+3) mod 23, 14 = (15+15+15+15) mod 23,
+15 = (15+0+0+0) mod 23, 16 = (15+1+0+0) mod 23, 17 = (15+1+1+0) mod 23,
+18 = (15+1+1+1) mod 23, 19 = (15+3+1+0) mod 23, 20 = (15+3+1+1) mod 23,
+21 = (15+3+3+0) mod 23, 22 = (15+3+3+1) mod 23
+
+--------------------
+Game:
+
+We have k cats. All cats have numbers. All cats is in trap where is board with fields n.
+Cats must fill up all fields by stones in board by moewing in single tour to be free.
+Number moewing in tour must be k. Stone starts from first field in board while beginning tour.
+Stone move number steps that having cat was moewed. If stone in last field
+and must make step then move to first field in board. Field going to be filled by stone
+after making step after last moewing. While tour, cat can moew any number and total number
+moewings is k. You task is finding that numbers for cats which allow cats to fill up
+all fields in board.
+
+-------------------------------
+Problem generalization:
+
+Find numbers which for all given sums fill modulo domain n (modulo n).
+* n - defines domain of modulo - modulo n.
+* S - choosen numbers
+* k - length of S
+* C - sum (choosen elements are in S, can be repeated)
+* T - set of sums ((0,1,3,4),(0,5,7),.....).
+
+`exists S for all i in [0..n) exists C in T sum(0<=j<len(C),S[C[j]]) mod n == i`.
