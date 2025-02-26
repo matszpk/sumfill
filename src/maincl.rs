@@ -1575,6 +1575,8 @@ fn main() {
         .parse().expect("Required n_start argument");
     let n_end: usize = args.next().expect("Required n_end argument")
         .parse().expect("Required n_end argument");
+    let device_index: usize = args.next().expect("Required device_index")
+        .parse().expect("Required device_index");
     
     let (shp, max_k) = if let Some(s) = args.next() {
         if s == "shp" {
@@ -1593,7 +1595,7 @@ fn main() {
             max_n >= i
         }).unwrap().try_into().unwrap();
         for k in ks..=max_k {
-            let mut clnwork = CLNWork::new(0, i, k).unwrap();
+            let mut clnwork = CLNWork::new(device_index, i, k).unwrap();
             if clnwork.calc_cl(shp) {
                 break;
             }
