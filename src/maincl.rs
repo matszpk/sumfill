@@ -816,9 +816,14 @@ impl CLNWork {
             0
         };
         
-        let group_len = usize::try_from(device.max_work_group_size()? >> 2).unwrap();
+        // let group_len = // usize::try_from(device.max_work_group_size()? >> 2).unwrap();
+        let group_len = if device.vendor()?.starts_with("NVIDIA") {
+            std::cmp::min(32, device.max_work_group_size()?)
+        } else {
+            std::cmp::min(64, device.max_work_group_size()?)
+        };
         let group_num = usize::try_from(8 * device.max_compute_units()?).unwrap();
-        println!("CLNWork: GroupLen: {}, GroupNum: {}", group_len, group_num);
+        eprintln!("CLNWork: GroupLen: {}, GroupNum: {}", group_len, group_num);
         
         let fclen = (n + 31) >> 5;
         let prog_opts = format!(
