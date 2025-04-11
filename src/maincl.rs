@@ -15,8 +15,6 @@ use utils::*;
 
 const L2_LEN_STEP_SIZE: usize = 32;
 
-// OPENCL VERSION DOESN'T WORK!!!! - bad results!!!
-
 // CPU routines
 
 fn init_sum_fill_diff_change(n: usize, comb: &[usize], comb_filled: &mut [u32],
